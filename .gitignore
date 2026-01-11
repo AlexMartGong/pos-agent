@@ -1,0 +1,78 @@
+# ============================================
+# POS Printer Agent - .gitignore
+# ============================================
+
+# ----------------
+# Archivos de compilación Maven
+# ----------------
+target/
+*.jar
+*.war
+*.ear
+*.class
+
+# ----------------
+# IDE - IntelliJ IDEA
+# ----------------
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+
+# ----------------
+# IDE - Eclipse
+# ----------------
+.classpath
+.project
+.settings/
+bin/
+
+# ----------------
+# IDE - NetBeans
+# ----------------
+nbproject/private/
+build/
+nbbuild/
+nbdist/
+
+# ----------------
+# IDE - VS Code
+# ----------------
+.vscode/
+
+# ----------------
+# Sistema operativo
+# ----------------
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# ----------------
+# Logs
+# ----------------
+*.log
+logs/
+
+# ----------------
+# Archivos temporales
+# ----------------
+*.tmp
+*.temp
+*.bak
+
+# ----------------
+# Configuración local (contiene datos sensibles o específicos del entorno)
+# ----------------
+# NOTA: config.properties contiene configuración específica de cada máquina
+# como rutas de impresora, URLs del servidor, etc.
+# Descomenta la siguiente línea si no quieres incluirlo en el repo:
+# config.properties
+
+# ----------------
+# Dependencias descargadas
+# ----------------
+dependency-reduced-pom.xml
+
