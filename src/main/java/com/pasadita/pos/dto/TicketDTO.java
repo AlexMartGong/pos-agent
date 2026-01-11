@@ -184,11 +184,23 @@ public class TicketDTO {
     public String toString() {
         return "TicketDTO{" +
                 "id=" + id +
-                ", customerName='" + customerName + '\'' +
+                ", employeeId=" + employeeId +
                 ", employeeName='" + employeeName + '\'' +
+                ", employeePhone='" + employeePhone + '\'' +
+                ", deliveryOrderId=" + deliveryOrderId +
+                ", customerId=" + customerId +
+                ", customerName='" + customerName + '\'' +
+                ", customerPhone='" + customerPhone + '\'' +
+                ", deliveryAddress='" + deliveryAddress + '\'' +
+                ", paymentMethodId=" + paymentMethodId +
+                ", paymentMethodName='" + paymentMethodName + '\'' +
+                ", datetime=" + datetime +
+                ", subtotal=" + subtotal +
+                ", discountAmount=" + discountAmount +
                 ", total=" + total +
                 ", paid=" + paid +
-                ", items=" + (saleDetails != null ? saleDetails.size() : 0) +
+                ", notes='" + notes + '\'' +
+                ", saleDetails=" + saleDetails +
                 '}';
     }
 }

@@ -112,13 +112,43 @@ public class ESCPOSPrinter {
     }
 
     /**
+     * Verifica si el ticket corresponde a un pedido a domicilio.
+     * Un pedido a domicilio tiene deliveryOrderId y deliveryAddress NO nulos.
+     *
+     * @param ticket DTO del ticket
+     * @return true si es pedido a domicilio, false si es venta en caja
+     */
+    private boolean isDeliveryOrder(TicketDTO ticket) {
+        return ticket.getDeliveryOrderId() != null && ticket.getDeliveryAddress() != null
+                && !ticket.getDeliveryAddress().isEmpty();
+    }
+
+    /**
      * Genera los comandos ESC/POS para un ticket completo.
+     * Detecta automáticamente si es venta en caja o pedido a domicilio.
      *
      * @param ticket DTO del ticket
      * @return Array de bytes con los comandos ESC/POS
      * @throws IOException Si hay error al generar los datos
      */
     public byte[] generateESCPOS(TicketDTO ticket) throws IOException {
+        boolean isDelivery = isDeliveryOrder(ticket);
+
+        if (isDelivery) {
+            return generateDeliveryTicket(ticket);
+        } else {
+            return generateCashRegisterTicket(ticket);
+        }
+    }
+
+    /**
+     * Genera ticket para venta en caja (punto de venta).
+     *
+     * @param ticket DTO del ticket
+     * @return Array de bytes con los comandos ESC/POS
+     * @throws IOException Si hay error al generar los datos
+     */
+    private byte[] generateCashRegisterTicket(TicketDTO ticket) throws IOException {
         ByteArrayOutputStream buffer = new ByteArrayOutputStream();
 
         // Inicializar impresora
@@ -130,8 +160,8 @@ public class ESCPOSPrinter {
         // Encabezado del negocio
         writeHeader(buffer);
 
-        // Información del ticket
-        writeTicketInfo(buffer, ticket);
+        // Información del ticket (venta en caja)
+        writeTicketInfoCashRegister(buffer, ticket);
 
         // Separador
         buffer.write(SEPARATOR.getBytes(StandardCharsets.ISO_8859_1));
@@ -147,8 +177,8 @@ public class ESCPOSPrinter {
         // Totales
         writeTotals(buffer, ticket);
 
-        // Pie de ticket
-        writeFooter(buffer, ticket);
+        // Pie de ticket (venta en caja)
+        writeFooterCashRegister(buffer, ticket);
 
         // Avance y corte de papel
         buffer.write(LINE_FEED);
@@ -159,25 +189,68 @@ public class ESCPOSPrinter {
         return buffer.toByteArray();
     }
 
-    private void writeHeader(ByteArrayOutputStream buffer) throws IOException {
-        buffer.write(ALIGN_CENTER);
-        buffer.write(DOUBLE_SIZE_ON);
-        buffer.write(businessName.getBytes(StandardCharsets.ISO_8859_1));
-        buffer.write(LINE_FEED);
-        buffer.write(NORMAL_SIZE);
+    /**
+     * Genera ticket para pedido a domicilio (delivery).
+     *
+     * @param ticket DTO del ticket
+     * @return Array de bytes con los comandos ESC/POS
+     * @throws IOException Si hay error al generar los datos
+     */
+    private byte[] generateDeliveryTicket(TicketDTO ticket) throws IOException {
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
 
-        if (businessAddress != null && !businessAddress.isEmpty()) {
-            buffer.write(businessAddress.getBytes(StandardCharsets.ISO_8859_1));
-            buffer.write(LINE_FEED);
-        }
-        if (businessPhone != null && !businessPhone.isEmpty()) {
-            buffer.write(("Tel: " + businessPhone).getBytes(StandardCharsets.ISO_8859_1));
-            buffer.write(LINE_FEED);
-        }
+        // Inicializar impresora
+        buffer.write(INIT);
+
+        // Configurar página de códigos para español
+        buffer.write(CHARSET_PC850);
+
+        // Encabezado del negocio
+        writeHeader(buffer);
+
+        // Banner de PEDIDO A DOMICILIO
+        buffer.write(ALIGN_CENTER);
+        buffer.write(BOLD_ON);
+        buffer.write(DOUBLE_SIZE_ON);
+        buffer.write("PEDIDO A DOMICILIO".getBytes(StandardCharsets.ISO_8859_1));
+        buffer.write(NORMAL_SIZE);
+        buffer.write(BOLD_OFF);
         buffer.write(LINE_FEED);
+        buffer.write(LINE_FEED);
+
+        // Información del pedido a domicilio
+        writeTicketInfoDelivery(buffer, ticket);
+
+        // Separador
+        buffer.write(SEPARATOR.getBytes(StandardCharsets.ISO_8859_1));
+        buffer.write(LINE_FEED);
+
+        // Detalles de productos
+        writeDetails(buffer, ticket.getSaleDetails());
+
+        // Separador
+        buffer.write(SEPARATOR.getBytes(StandardCharsets.ISO_8859_1));
+        buffer.write(LINE_FEED);
+
+        // Totales
+        writeTotals(buffer, ticket);
+
+        // Pie de ticket (delivery)
+        writeFooterDelivery(buffer, ticket);
+
+        // Avance y corte de papel
+        buffer.write(LINE_FEED);
+        buffer.write(LINE_FEED);
+        buffer.write(LINE_FEED);
+        buffer.write(CUT_PAPER_FEED);
+
+        return buffer.toByteArray();
     }
 
-    private void writeTicketInfo(ByteArrayOutputStream buffer, TicketDTO ticket) throws IOException {
+    /**
+     * Escribe la información del ticket para venta en caja.
+     */
+    private void writeTicketInfoCashRegister(ByteArrayOutputStream buffer, TicketDTO ticket) throws IOException {
         buffer.write(ALIGN_LEFT);
 
         // Número de ticket
@@ -198,7 +271,7 @@ public class ESCPOSPrinter {
             buffer.write(LINE_FEED);
         }
 
-        // Cliente
+        // Cliente (opcional en caja)
         if (ticket.getCustomerName() != null && !ticket.getCustomerName().isEmpty()) {
             buffer.write(("Cliente: " + ticket.getCustomerName()).getBytes(StandardCharsets.ISO_8859_1));
             buffer.write(LINE_FEED);
@@ -210,6 +283,183 @@ public class ESCPOSPrinter {
             buffer.write(LINE_FEED);
         }
 
+        buffer.write(LINE_FEED);
+    }
+
+    /**
+     * Escribe la información del ticket para pedido a domicilio.
+     */
+    private void writeTicketInfoDelivery(ByteArrayOutputStream buffer, TicketDTO ticket) throws IOException {
+        buffer.write(ALIGN_LEFT);
+
+        // Número de pedido (delivery order)
+        buffer.write(BOLD_ON);
+        buffer.write(DOUBLE_HEIGHT_ON);
+        buffer.write(("PEDIDO #" + ticket.getDeliveryOrderId()).getBytes(StandardCharsets.ISO_8859_1));
+        buffer.write(NORMAL_SIZE);
+        buffer.write(BOLD_OFF);
+        buffer.write(LINE_FEED);
+
+        // Número de ticket/venta asociado
+        buffer.write(("Ticket Venta: #" + ticket.getId()).getBytes(StandardCharsets.ISO_8859_1));
+        buffer.write(LINE_FEED);
+
+        // Fecha y hora
+        if (ticket.getDatetime() != null) {
+            buffer.write(("Fecha: " + ticket.getDatetime().format(DATE_FORMAT)).getBytes(StandardCharsets.ISO_8859_1));
+            buffer.write(LINE_FEED);
+        }
+
+        buffer.write(LINE_FEED);
+
+        // Sección de datos del cliente (importante para delivery)
+        buffer.write(BOLD_ON);
+        buffer.write("------ DATOS DEL CLIENTE ------".getBytes(StandardCharsets.ISO_8859_1));
+        buffer.write(BOLD_OFF);
+        buffer.write(LINE_FEED);
+
+        // Nombre del cliente
+        if (ticket.getCustomerName() != null && !ticket.getCustomerName().isEmpty()) {
+            buffer.write(("Nombre: " + ticket.getCustomerName()).getBytes(StandardCharsets.ISO_8859_1));
+            buffer.write(LINE_FEED);
+        }
+
+        // Teléfono del cliente
+        if (ticket.getCustomerPhone() != null && !ticket.getCustomerPhone().isEmpty()) {
+            buffer.write(("Telefono: " + ticket.getCustomerPhone()).getBytes(StandardCharsets.ISO_8859_1));
+            buffer.write(LINE_FEED);
+        }
+
+        // Dirección de entrega (muy importante para delivery)
+        if (ticket.getDeliveryAddress() != null && !ticket.getDeliveryAddress().isEmpty()) {
+            buffer.write(BOLD_ON);
+            buffer.write("Direccion:".getBytes(StandardCharsets.ISO_8859_1));
+            buffer.write(BOLD_OFF);
+            buffer.write(LINE_FEED);
+            // La dirección puede ser larga, escribirla en líneas separadas si es necesario
+            writeWrappedText(buffer, ticket.getDeliveryAddress(), TICKET_WIDTH);
+        }
+
+        buffer.write(LINE_FEED);
+
+        // Empleado que tomó el pedido
+        if (ticket.getEmployeeName() != null) {
+            buffer.write(("Atendio: " + ticket.getEmployeeName()).getBytes(StandardCharsets.ISO_8859_1));
+            buffer.write(LINE_FEED);
+        }
+
+        // Método de pago
+        if (ticket.getPaymentMethodName() != null) {
+            buffer.write(("Forma de Pago: " + ticket.getPaymentMethodName()).getBytes(StandardCharsets.ISO_8859_1));
+            buffer.write(LINE_FEED);
+        }
+
+        buffer.write(LINE_FEED);
+    }
+
+    /**
+     * Escribe texto largo dividido en múltiples líneas.
+     */
+    private void writeWrappedText(ByteArrayOutputStream buffer, String text, int maxWidth) throws IOException {
+        if (text == null || text.isEmpty()) return;
+
+        int start = 0;
+        while (start < text.length()) {
+            int end = Math.min(start + maxWidth, text.length());
+            buffer.write(text.substring(start, end).getBytes(StandardCharsets.ISO_8859_1));
+            buffer.write(LINE_FEED);
+            start = end;
+        }
+    }
+
+    /**
+     * Escribe el pie del ticket para venta en caja.
+     */
+    private void writeFooterCashRegister(ByteArrayOutputStream buffer, TicketDTO ticket) throws IOException {
+        buffer.write(LINE_FEED);
+        buffer.write(ALIGN_CENTER);
+
+        // Estado de pago
+        if (ticket.isPaid()) {
+            buffer.write(BOLD_ON);
+            buffer.write("*** PAGADO ***".getBytes(StandardCharsets.ISO_8859_1));
+            buffer.write(BOLD_OFF);
+        } else {
+            buffer.write("** PENDIENTE DE PAGO **".getBytes(StandardCharsets.ISO_8859_1));
+        }
+        buffer.write(LINE_FEED);
+
+        // Notas
+        if (ticket.getNotes() != null && !ticket.getNotes().isEmpty()) {
+            buffer.write(LINE_FEED);
+            buffer.write(("Nota: " + ticket.getNotes()).getBytes(StandardCharsets.ISO_8859_1));
+            buffer.write(LINE_FEED);
+        }
+
+        buffer.write(LINE_FEED);
+        buffer.write("Gracias por su compra!".getBytes(StandardCharsets.ISO_8859_1));
+        buffer.write(LINE_FEED);
+        buffer.write(ALIGN_LEFT);
+    }
+
+    /**
+     * Escribe el pie del ticket para pedido a domicilio.
+     */
+    private void writeFooterDelivery(ByteArrayOutputStream buffer, TicketDTO ticket) throws IOException {
+        buffer.write(LINE_FEED);
+        buffer.write(ALIGN_CENTER);
+
+        // Estado de pago (importante para delivery - cobrar o no)
+        if (ticket.isPaid()) {
+            buffer.write(BOLD_ON);
+            buffer.write(DOUBLE_SIZE_ON);
+            buffer.write("*** PAGADO ***".getBytes(StandardCharsets.ISO_8859_1));
+            buffer.write(NORMAL_SIZE);
+            buffer.write(BOLD_OFF);
+        } else {
+            buffer.write(BOLD_ON);
+            buffer.write(DOUBLE_SIZE_ON);
+            buffer.write("** COBRAR AL ENTREGAR **".getBytes(StandardCharsets.ISO_8859_1));
+            buffer.write(NORMAL_SIZE);
+            buffer.write(BOLD_OFF);
+            buffer.write(LINE_FEED);
+            buffer.write(("Monto a cobrar: $" + formatPrice(ticket.getTotal())).getBytes(StandardCharsets.ISO_8859_1));
+        }
+        buffer.write(LINE_FEED);
+
+        // Notas (pueden tener instrucciones de entrega)
+        if (ticket.getNotes() != null && !ticket.getNotes().isEmpty()) {
+            buffer.write(LINE_FEED);
+            buffer.write(BOLD_ON);
+            buffer.write("NOTAS:".getBytes(StandardCharsets.ISO_8859_1));
+            buffer.write(BOLD_OFF);
+            buffer.write(LINE_FEED);
+            writeWrappedText(buffer, ticket.getNotes(), TICKET_WIDTH);
+        }
+
+        buffer.write(LINE_FEED);
+        buffer.write(SEPARATOR.getBytes(StandardCharsets.ISO_8859_1));
+        buffer.write(LINE_FEED);
+        buffer.write("Gracias por su preferencia!".getBytes(StandardCharsets.ISO_8859_1));
+        buffer.write(LINE_FEED);
+        buffer.write(ALIGN_LEFT);
+    }
+
+    private void writeHeader(ByteArrayOutputStream buffer) throws IOException {
+        buffer.write(ALIGN_CENTER);
+        buffer.write(DOUBLE_SIZE_ON);
+        buffer.write(businessName.getBytes(StandardCharsets.ISO_8859_1));
+        buffer.write(LINE_FEED);
+        buffer.write(NORMAL_SIZE);
+
+        if (businessAddress != null && !businessAddress.isEmpty()) {
+            buffer.write(businessAddress.getBytes(StandardCharsets.ISO_8859_1));
+            buffer.write(LINE_FEED);
+        }
+        if (businessPhone != null && !businessPhone.isEmpty()) {
+            buffer.write(("Tel: " + businessPhone).getBytes(StandardCharsets.ISO_8859_1));
+            buffer.write(LINE_FEED);
+        }
         buffer.write(LINE_FEED);
     }
 
@@ -262,33 +512,6 @@ public class ESCPOSPrinter {
         buffer.write(BOLD_OFF);
         buffer.write(LINE_FEED);
 
-        buffer.write(ALIGN_LEFT);
-    }
-
-    private void writeFooter(ByteArrayOutputStream buffer, TicketDTO ticket) throws IOException {
-        buffer.write(LINE_FEED);
-        buffer.write(ALIGN_CENTER);
-
-        // Estado de pago
-        if (ticket.isPaid()) {
-            buffer.write(BOLD_ON);
-            buffer.write("*** PAGADO ***".getBytes(StandardCharsets.ISO_8859_1));
-            buffer.write(BOLD_OFF);
-        } else {
-            buffer.write("** PENDIENTE DE PAGO **".getBytes(StandardCharsets.ISO_8859_1));
-        }
-        buffer.write(LINE_FEED);
-
-        // Notas
-        if (ticket.getNotes() != null && !ticket.getNotes().isEmpty()) {
-            buffer.write(LINE_FEED);
-            buffer.write(("Nota: " + ticket.getNotes()).getBytes(StandardCharsets.ISO_8859_1));
-            buffer.write(LINE_FEED);
-        }
-
-        buffer.write(LINE_FEED);
-        buffer.write("Gracias por su compra!".getBytes(StandardCharsets.ISO_8859_1));
-        buffer.write(LINE_FEED);
         buffer.write(ALIGN_LEFT);
     }
 
