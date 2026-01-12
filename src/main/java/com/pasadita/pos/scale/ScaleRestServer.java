@@ -1,0 +1,313 @@
+package com.pasadita.pos.scale;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpHandler;
+import com.sun.net.httpserver.HttpServer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.Executors;
+
+/**
+ * Servidor REST simple para báscula usando HttpServer de Java
+ * Sin dependencias de Spring Boot
+ */
+public class ScaleRestServer {
+
+    private static final Logger logger = LoggerFactory.getLogger(ScaleRestServer.class);
+    private static final int PORT = 8081;
+
+    private HttpServer server;
+    private TorreyScaleController scaleController;
+    private ObjectMapper objectMapper;
+
+    private String scalePort;
+    private boolean scaleEnabled;
+    private boolean autoConnect;
+
+    public ScaleRestServer(String scalePort, boolean scaleEnabled, boolean autoConnect) {
+        this.scalePort = scalePort;
+        this.scaleEnabled = scaleEnabled;
+        this.autoConnect = autoConnect;
+        this.objectMapper = new ObjectMapper();
+    }
+
+    /**
+     * Inicia el servidor REST
+     */
+    public void start() throws IOException {
+        logger.info("Iniciando servidor REST en puerto {}...", PORT);
+
+        // Crear servidor HTTP
+        server = HttpServer.create(new InetSocketAddress(PORT), 0);
+
+        // Configurar endpoints
+        server.createContext("/api/scale/weight", new WeightHandler());
+        server.createContext("/api/scale/status", new StatusHandler());
+        server.createContext("/api/scale/connect", new ConnectHandler());
+        server.createContext("/api/scale/disconnect", new DisconnectHandler());
+        server.createContext("/api/scale/ports", new PortsHandler());
+
+        // Configurar executor
+        server.setExecutor(Executors.newFixedThreadPool(4));
+
+        // Inicializar báscula si está habilitada
+        if (scaleEnabled) {
+            logger.info("Báscula habilitada en puerto: {}", scalePort);
+            scaleController = new TorreyScaleController(scalePort);
+
+            if (autoConnect) {
+                logger.info("Auto-conectando con báscula...");
+                scaleController.connect();
+            }
+        } else {
+            logger.warn("Báscula deshabilitada en configuración");
+        }
+
+        // Iniciar servidor
+        server.start();
+        logger.info("Servidor REST iniciado en http://localhost:{}", PORT);
+    }
+
+    /**
+     * Detiene el servidor REST
+     */
+    public void stop() {
+        if (server != null) {
+            logger.info("Deteniendo servidor REST...");
+            server.stop(0);
+        }
+
+        if (scaleController != null && scaleController.isConnected()) {
+            logger.info("Desconectando báscula...");
+            scaleController.disconnect();
+        }
+    }
+
+    /**
+     * Handler para GET /api/scale/weight
+     */
+    private class WeightHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            // Solo permitir GET
+            if (!"GET".equals(exchange.getRequestMethod())) {
+                sendResponse(exchange, 405, createError("Método no permitido"));
+                return;
+            }
+
+            Map<String, Object> response = new HashMap<>();
+
+            if (!scaleEnabled) {
+                response.put("success", false);
+                response.put("error", "Báscula no habilitada");
+                sendResponse(exchange, 503, response);
+                return;
+            }
+
+            if (scaleController == null || !scaleController.isConnected()) {
+                response.put("success", false);
+                response.put("error", "Báscula no conectada");
+                response.put("connected", false);
+                sendResponse(exchange, 503, response);
+                return;
+            }
+
+            try {
+                TorreyScaleController.WeightReading reading = scaleController.readWeight();
+
+                if (reading.isSuccess()) {
+                    response.put("success", true);
+                    response.put("weight", reading.getWeight());
+                    response.put("unit", reading.getUnit());
+                    response.put("stable", reading.isStable());
+                    response.put("connected", true);
+                    sendResponse(exchange, 200, response);
+                } else {
+                    response.put("success", false);
+                    response.put("error", reading.getErrorMessage());
+                    response.put("connected", scaleController.isConnected());
+                    sendResponse(exchange, 500, response);
+                }
+
+            } catch (Exception e) {
+                logger.error("Error al leer peso: {}", e.getMessage(), e);
+                response.put("success", false);
+                response.put("error", "Error al leer peso: " + e.getMessage());
+                response.put("connected", false);
+                sendResponse(exchange, 500, response);
+            }
+        }
+    }
+
+    /**
+     * Handler para GET /api/scale/status
+     */
+    private class StatusHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (!"GET".equals(exchange.getRequestMethod())) {
+                sendResponse(exchange, 405, createError("Método no permitido"));
+                return;
+            }
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("enabled", scaleEnabled);
+            response.put("port", scalePort);
+
+            if (scaleController != null) {
+                response.put("connected", scaleController.isConnected());
+                response.put("portName", scaleController.getPortName());
+            } else {
+                response.put("connected", false);
+                response.put("portName", null);
+            }
+
+            sendResponse(exchange, 200, response);
+        }
+    }
+
+    /**
+     * Handler para POST /api/scale/connect
+     */
+    private class ConnectHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (!"POST".equals(exchange.getRequestMethod())) {
+                sendResponse(exchange, 405, createError("Método no permitido"));
+                return;
+            }
+
+            Map<String, Object> response = new HashMap<>();
+
+            if (!scaleEnabled) {
+                response.put("success", false);
+                response.put("error", "Báscula no habilitada en configuración");
+                sendResponse(exchange, 503, response);
+                return;
+            }
+
+            if (scaleController == null) {
+                scaleController = new TorreyScaleController(scalePort);
+            }
+
+            if (scaleController.isConnected()) {
+                response.put("success", true);
+                response.put("message", "Ya conectado");
+                response.put("connected", true);
+                sendResponse(exchange, 200, response);
+                return;
+            }
+
+            boolean connected = scaleController.connect();
+
+            response.put("success", connected);
+            response.put("connected", connected);
+            response.put("message", connected ? "Conectado exitosamente" : "Error al conectar");
+
+            if (!connected) {
+                response.put("error", "No se pudo establecer conexión con la báscula");
+                sendResponse(exchange, 500, response);
+            } else {
+                sendResponse(exchange, 200, response);
+            }
+        }
+    }
+
+    /**
+     * Handler para POST /api/scale/disconnect
+     */
+    private class DisconnectHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (!"POST".equals(exchange.getRequestMethod())) {
+                sendResponse(exchange, 405, createError("Método no permitido"));
+                return;
+            }
+
+            Map<String, Object> response = new HashMap<>();
+
+            if (scaleController != null) {
+                scaleController.disconnect();
+                response.put("success", true);
+                response.put("message", "Desconectado exitosamente");
+                response.put("connected", false);
+            } else {
+                response.put("success", false);
+                response.put("message", "No hay controlador de báscula");
+                response.put("connected", false);
+            }
+
+            sendResponse(exchange, 200, response);
+        }
+    }
+
+    /**
+     * Handler para GET /api/scale/ports
+     */
+    private class PortsHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (!"GET".equals(exchange.getRequestMethod())) {
+                sendResponse(exchange, 405, createError("Método no permitido"));
+                return;
+            }
+
+            Map<String, Object> response = new HashMap<>();
+
+            try {
+                String[] ports = TorreyScaleController.getAvailablePorts();
+                response.put("success", true);
+                response.put("ports", ports);
+                response.put("count", ports.length);
+                response.put("currentPort", scalePort);
+
+                sendResponse(exchange, 200, response);
+
+            } catch (Exception e) {
+                logger.error("Error al listar puertos: {}", e.getMessage(), e);
+                response.put("success", false);
+                response.put("error", e.getMessage());
+                sendResponse(exchange, 500, response);
+            }
+        }
+    }
+
+    /**
+     * Envía una respuesta JSON
+     */
+    private void sendResponse(HttpExchange exchange, int statusCode, Map<String, Object> data) throws IOException {
+        // Agregar headers CORS
+        exchange.getResponseHeaders().add("Access-Control-Allow-Origin", "*");
+        exchange.getResponseHeaders().add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+        exchange.getResponseHeaders().add("Access-Control-Allow-Headers", "Content-Type");
+        exchange.getResponseHeaders().add("Content-Type", "application/json");
+
+        // Convertir a JSON
+        String jsonResponse = objectMapper.writeValueAsString(data);
+        byte[] responseBytes = jsonResponse.getBytes(StandardCharsets.UTF_8);
+
+        // Enviar respuesta
+        exchange.sendResponseHeaders(statusCode, responseBytes.length);
+        OutputStream os = exchange.getResponseBody();
+        os.write(responseBytes);
+        os.close();
+    }
+
+    /**
+     * Crea un mapa de error
+     */
+    private Map<String, Object> createError(String message) {
+        Map<String, Object> error = new HashMap<>();
+        error.put("success", false);
+        error.put("error", message);
+        return error;
+    }
+}

@@ -3,6 +3,7 @@ package com.pasadita.pos;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.pasadita.pos.dto.TicketDTO;
+import com.pasadita.pos.scale.ScaleRestServer;
 import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
 
@@ -36,6 +37,9 @@ public class POSPrinterAgent extends WebSocketClient {
     private static final String DEFAULT_SERVER_URL = "ws://localhost:8080/ws/printer";
     private static final String DEFAULT_STATION_ID = "POS1";
     private static final String DEFAULT_PRINTER_PATH = "/dev/usb/lp0";
+    private static final String DEFAULT_SCALE_PORT = "/dev/ttyACM0";
+    private static final boolean DEFAULT_SCALE_ENABLED = true;
+    private static final boolean DEFAULT_SCALE_AUTO_CONNECT = true;
     private static final int RECONNECT_DELAY_SECONDS = 5;
 
     // Formato para logging
@@ -285,6 +289,11 @@ public class POSPrinterAgent extends WebSocketClient {
         String businessAddress = getConfig("BUSINESS_ADDRESS", "business.address", fileConfig, "");
         String businessPhone = getConfig("BUSINESS_PHONE", "business.phone", fileConfig, "");
 
+        // Configuración de báscula
+        String scalePort = getConfig("SCALE_PORT", "scale.port", fileConfig, DEFAULT_SCALE_PORT);
+        boolean scaleEnabled = Boolean.parseBoolean(getConfig("SCALE_ENABLED", "scale.enabled", fileConfig, String.valueOf(DEFAULT_SCALE_ENABLED)));
+        boolean scaleAutoConnect = Boolean.parseBoolean(getConfig("SCALE_AUTO_CONNECT", "scale.autoConnect", fileConfig, String.valueOf(DEFAULT_SCALE_AUTO_CONNECT)));
+
         // Construir URL con stationId
         String fullUrl = serverUrl + "?stationId=" + stationId;
 
@@ -293,6 +302,9 @@ public class POSPrinterAgent extends WebSocketClient {
         log("INFO", "  Server URL: " + fullUrl);
         log("INFO", "  Printer Path: " + printerPath);
         log("INFO", "  Business: " + businessName);
+        log("INFO", "  Scale Port: " + scalePort);
+        log("INFO", "  Scale Enabled: " + scaleEnabled);
+        log("INFO", "  Scale Auto-Connect: " + scaleAutoConnect);
         log("INFO", "============================================");
 
         // Verificar si se solicita página de prueba
@@ -316,6 +328,20 @@ public class POSPrinterAgent extends WebSocketClient {
         ESCPOSPrinter printer = new ESCPOSPrinter(businessName, businessAddress, businessPhone, printerPath);
         log("INFO", "Impresora disponible: " + printer.isAvailable());
 
+        // Iniciar servidor REST de báscula
+        ScaleRestServer scaleServer = null;
+        if (scaleEnabled) {
+            try {
+                scaleServer = new ScaleRestServer(scalePort, scaleEnabled, scaleAutoConnect);
+                scaleServer.start();
+                log("INFO", "Servidor REST de báscula iniciado en http://localhost:8081");
+            } catch (Exception e) {
+                log("ERROR", "Error al iniciar servidor REST de báscula: " + e.getMessage());
+            }
+        }
+
+        final ScaleRestServer finalScaleServer = scaleServer;
+
         try {
             URI serverUri = new URI(fullUrl);
             POSPrinterAgent agent = new POSPrinterAgent(serverUri, stationId, printer);
@@ -324,6 +350,10 @@ public class POSPrinterAgent extends WebSocketClient {
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {
                 log("INFO", "Señal de cierre recibida");
                 agent.shutdown();
+                if (finalScaleServer != null) {
+                    log("INFO", "Deteniendo servidor REST de báscula...");
+                    finalScaleServer.stop();
+                }
             }));
 
             // Conectar al servidor
