@@ -26,11 +26,11 @@ public class ScaleRestServer {
 
     private HttpServer server;
     private TorreyScaleController scaleController;
-    private ObjectMapper objectMapper;
+    private final ObjectMapper objectMapper;
 
-    private String scalePort;
-    private boolean scaleEnabled;
-    private boolean autoConnect;
+    private final String scalePort;
+    private final boolean scaleEnabled;
+    private final boolean autoConnect;
 
     public ScaleRestServer(String scalePort, boolean scaleEnabled, boolean autoConnect) {
         this.scalePort = scalePort;
@@ -99,7 +99,7 @@ public class ScaleRestServer {
         public void handle(HttpExchange exchange) throws IOException {
             // Solo permitir GET
             if (!"GET".equals(exchange.getRequestMethod())) {
-                sendResponse(exchange, 405, createError("Método no permitido"));
+                sendResponse(exchange, 405, createError());
                 return;
             }
 
@@ -123,16 +123,16 @@ public class ScaleRestServer {
             try {
                 TorreyScaleController.WeightReading reading = scaleController.readWeight();
 
-                if (reading.isSuccess()) {
+                if (reading.success()) {
                     response.put("success", true);
-                    response.put("weight", reading.getWeight());
-                    response.put("unit", reading.getUnit());
-                    response.put("stable", reading.isStable());
+                    response.put("weight", reading.weight());
+                    response.put("unit", reading.unit());
+                    response.put("stable", reading.stable());
                     response.put("connected", true);
                     sendResponse(exchange, 200, response);
                 } else {
                     response.put("success", false);
-                    response.put("error", reading.getErrorMessage());
+                    response.put("error", reading.errorMessage());
                     response.put("connected", scaleController.isConnected());
                     sendResponse(exchange, 500, response);
                 }
@@ -154,7 +154,7 @@ public class ScaleRestServer {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
             if (!"GET".equals(exchange.getRequestMethod())) {
-                sendResponse(exchange, 405, createError("Método no permitido"));
+                sendResponse(exchange, 405, createError());
                 return;
             }
 
@@ -181,7 +181,7 @@ public class ScaleRestServer {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
             if (!"POST".equals(exchange.getRequestMethod())) {
-                sendResponse(exchange, 405, createError("Método no permitido"));
+                sendResponse(exchange, 405, createError());
                 return;
             }
 
@@ -228,7 +228,7 @@ public class ScaleRestServer {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
             if (!"POST".equals(exchange.getRequestMethod())) {
-                sendResponse(exchange, 405, createError("Método no permitido"));
+                sendResponse(exchange, 405, createError());
                 return;
             }
 
@@ -256,7 +256,7 @@ public class ScaleRestServer {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
             if (!"GET".equals(exchange.getRequestMethod())) {
-                sendResponse(exchange, 405, createError("Método no permitido"));
+                sendResponse(exchange, 405, createError());
                 return;
             }
 
@@ -304,10 +304,10 @@ public class ScaleRestServer {
     /**
      * Crea un mapa de error
      */
-    private Map<String, Object> createError(String message) {
+    private Map<String, Object> createError() {
         Map<String, Object> error = new HashMap<>();
         error.put("success", false);
-        error.put("error", message);
+        error.put("error", "Método no permitido");
         return error;
     }
 }

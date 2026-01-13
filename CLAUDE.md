@@ -1,0 +1,141 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project Overview
+
+POS Printer Agent for La Pasadita - A Java application that connects to a backend via WebSocket and sends receipt tickets to ESC/POS thermal printers. The system supports both cash register sales and delivery orders, and includes integration with Torrey PCR series scales.
+
+## Build and Run Commands
+
+### Build
+```bash
+mvn clean package
+```
+Generates `target/pos-printer-agent.jar` with all dependencies.
+
+### Run
+```bash
+# With default config.properties in current directory
+java -jar target/pos-printer-agent.jar
+
+# With custom config file
+java -jar target/pos-printer-agent.jar /path/to/config.properties
+
+# Print test page
+java -jar target/pos-printer-agent.jar --test
+```
+
+### Configuration
+Configuration priority: Environment variables > `config.properties` > defaults
+
+Key properties in `config.properties`:
+- `server.url` - WebSocket server URL (e.g., `ws://localhost:8080/ws/printer`)
+- `station.id` - Unique POS station identifier
+- `printer.path` - Printer device path (`/dev/usb/lp0` on Linux, `COM1` or `LPT1` on Windows)
+- `business.name`, `business.address`, `business.phone` - Business header info
+- `scale.port` - Serial port for Torrey scale (`/dev/ttyACM0` on Linux, `COM1` on Windows)
+- `scale.enabled` - Enable/disable scale REST server (true/false)
+- `scale.autoConnect` - Auto-connect to scale on startup (true/false)
+
+## Architecture
+
+### Core Components
+
+**POSPrinterAgent** (`src/main/java/com/pasadita/pos/POSPrinterAgent.java`)
+- Main class extending `WebSocketClient`
+- Manages WebSocket connection to backend with auto-reconnect
+- Receives JSON ticket messages, deserializes with Jackson, and sends to printer
+- Sends confirmation messages back to server (`CONNECTED`, `PRINT_RESULT`)
+- Starts the scale REST server if enabled
+
+**ESCPOSPrinter** (`src/main/java/com/pasadita/pos/ESCPOSPrinter.java`)
+- Generates ESC/POS commands for Epson TM-T88V thermal printers
+- Auto-detects ticket type based on `deliveryOrderId` and `deliveryAddress`:
+  - **Cash register ticket**: Standard sale receipt
+  - **Delivery ticket**: Includes customer details, delivery address, payment status prominently displayed
+- Writes directly to printer device file (no driver required)
+- Supports 80mm thermal printers (42 chars/line), PC850 charset for Spanish
+
+**Scale Integration** (`src/main/java/com/pasadita/pos/scale/`)
+- **TorreyScaleController**: Serial communication with Torrey PCR series scales via jSerialComm
+  - Sends 'W' command to read weight
+  - Parses response for weight value, unit (kg/g), and stability status
+  - Configurable for 9600 baud, 8N1 settings
+- **ScaleRestServer**: Lightweight HTTP server (no Spring Boot) on port 8081
+  - GET `/api/scale/weight` - Read current weight
+  - GET `/api/scale/status` - Connection status
+  - POST `/api/scale/connect` - Connect to scale
+  - POST `/api/scale/disconnect` - Disconnect from scale
+  - GET `/api/scale/ports` - List available serial ports
+  - CORS enabled for frontend integration
+
+### Data Flow
+
+1. Backend creates sale/delivery order and sends ticket JSON via WebSocket
+2. `POSPrinterAgent.onMessage()` deserializes `TicketDTO` with Jackson
+3. `ESCPOSPrinter.print()` generates ESC/POS byte commands
+4. Commands written directly to printer device (e.g., `/dev/usb/lp0`)
+5. Confirmation JSON sent back to server with success/error status
+
+### WebSocket Protocol
+
+**Outgoing messages from agent:**
+- `CONNECTED`: Sent on successful connection
+  ```json
+  {"type":"CONNECTED","stationId":"POS1","timestamp":"2025-01-12 14:30:00"}
+  ```
+- `PRINT_RESULT`: Sent after print attempt
+  ```json
+  {"type":"PRINT_RESULT","ticketId":123,"success":true,"stationId":"POS1","timestamp":"2025-01-12 14:30:00"}
+  // With error:
+  {"type":"PRINT_RESULT","ticketId":124,"success":false,"stationId":"POS1","timestamp":"...","error":"Printer not available"}
+  ```
+
+**Incoming messages to agent:**
+- Full `TicketDTO` JSON object with `saleDetails` array
+
+### Ticket Type Detection
+
+The system automatically determines ticket type in `ESCPOSPrinter.isDeliveryOrder()`:
+- **Delivery order**: `deliveryOrderId != null && deliveryAddress != null && !deliveryAddress.isEmpty()`
+- **Cash register**: Otherwise
+
+Delivery tickets emphasize customer name, phone, address, and payment status (PAGADO vs COBRAR AL ENTREGAR).
+
+## Device Permissions (Linux)
+
+Printer access requires:
+```bash
+# Add user to lp group
+sudo usermod -a -G lp $USER
+# Then logout/login
+
+# Or grant direct permissions
+sudo chmod 666 /dev/usb/lp0
+```
+
+Scale access requires:
+```bash
+# Add user to dialout group
+sudo usermod -a -G dialout $USER
+# Then logout/login
+```
+
+## Dependencies
+
+- Java 17+
+- Maven 3.6+
+- Java-WebSocket 1.5.4 - WebSocket client
+- Jackson 2.15.3 - JSON serialization/deserialization with JSR310 module for LocalDateTime
+- jSerialComm 2.10.4 - Serial port communication for scale
+- SLF4J 2.0.9 - Logging
+
+## Key Design Patterns
+
+- **Auto-reconnection**: 5-second delay retry on WebSocket disconnect/error
+- **Direct device I/O**: Printer accessed as file (`FileOutputStream`) for simplicity
+- **Character encoding**: ISO-8859-1 for ESC/POS, PC850 charset for Spanish characters
+- **Ticket width**: 42 characters for 80mm printers
+- **Configuration cascade**: ENV vars override properties file, which overrides defaults
+- **Shutdown hook**: Graceful cleanup on SIGTERM/SIGINT

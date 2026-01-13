@@ -91,7 +91,7 @@ public class POSPrinterAgent extends WebSocketClient {
         log("INFO", "Mensaje recibido del servidor (" + message.length() + " bytes)");
 
         try {
-            // Deserializar JSON a TicketDTO usando Jackson
+            // Deserializer JSON TicketDTO usando Jackson
             TicketDTO ticket = objectMapper.readValue(message, TicketDTO.class);
             log("INFO", "Ticket #" + ticket.getId() + " parseado - Cliente: " + ticket.getCustomerName());
 
@@ -110,7 +110,7 @@ public class POSPrinterAgent extends WebSocketClient {
     /**
      * Imprime el ticket y envía confirmación al servidor.
      *
-     * @param ticket TicketDTO a imprimir
+     * @param ticket TicketDTO an imprimir
      */
     private void printTicket(TicketDTO ticket) {
         boolean success = false;

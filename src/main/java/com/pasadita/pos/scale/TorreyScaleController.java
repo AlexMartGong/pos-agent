@@ -29,7 +29,7 @@ public class TorreyScaleController {
     private static final byte[] COMMAND_READ_WEIGHT = {0x57}; // 'W' - Solicitar peso
 
     private SerialPort serialPort;
-    private String portName;
+    private final String portName;
     private boolean isConnected;
 
     public TorreyScaleController(String portName) {
@@ -214,58 +214,24 @@ public class TorreyScaleController {
     }
 
     /**
-     * Clase interna para representar una lectura de peso
-     */
-    public static class WeightReading {
-        private final double weight;
-        private final String unit;
-        private final boolean stable;
-        private final boolean success;
-        private final String errorMessage;
-
-        public WeightReading(double weight, String unit, boolean stable, boolean success, String errorMessage) {
-            this.weight = weight;
-            this.unit = unit;
-            this.stable = stable;
-            this.success = success;
-            this.errorMessage = errorMessage;
-        }
+         * Clase interna para representar una lectura de peso
+         */
+        public record WeightReading(double weight, String unit, boolean stable, boolean success, String errorMessage) {
 
         public static WeightReading zero() {
-            return new WeightReading(0.0, "kg", true, true, null);
-        }
-
-        public static WeightReading error(String message) {
-            return new WeightReading(0.0, "kg", false, false, message);
-        }
-
-        // Getters
-        public double getWeight() {
-            return weight;
-        }
-
-        public String getUnit() {
-            return unit;
-        }
-
-        public boolean isStable() {
-            return stable;
-        }
-
-        public boolean isSuccess() {
-            return success;
-        }
-
-        public String getErrorMessage() {
-            return errorMessage;
-        }
-
-        @Override
-        public String toString() {
-            if (!success) {
-                return String.format("Error: %s", errorMessage);
+                return new WeightReading(0.0, "kg", true, true, null);
             }
-            return String.format("%.3f %s (%s)", weight, unit, stable ? "estable" : "inestable");
+
+            public static WeightReading error(String message) {
+                return new WeightReading(0.0, "kg", false, false, message);
+            }
+
+            @Override
+            public String toString() {
+                if (!success) {
+                    return String.format("Error: %s", errorMessage);
+                }
+                return String.format("%.3f %s (%s)", weight, unit, stable ? "estable" : "inestable");
+            }
         }
-    }
 }
