@@ -28,9 +28,20 @@ public class TorreyScaleController {
     // Comandos Torrey PCR
     private static final byte[] COMMAND_READ_WEIGHT = {0x57}; // 'W' - Solicitar peso
 
+    // Intervalo de polling interno (ms)
+    private static final int POLLING_INTERVAL = 300;
+
     private SerialPort serialPort;
     private final String portName;
-    private boolean isConnected;
+    private volatile boolean isConnected;
+
+    // Caché del último peso leído (thread-safe)
+    private volatile WeightReading lastReading = WeightReading.zero();
+    private volatile long lastReadTime = 0;
+
+    // Hilo de polling dedicado
+    private Thread pollingThread;
+    private volatile boolean pollingActive = false;
 
     public TorreyScaleController(String portName) {
         this.portName = portName;
@@ -63,6 +74,9 @@ public class TorreyScaleController {
                 // Esperar un momento para estabilizar la conexión
                 TimeUnit.MILLISECONDS.sleep(500);
 
+                // Iniciar polling dedicado
+                startPolling();
+
                 return true;
             } else {
                 logger.error("No se pudo abrir el puerto {}", portName);
@@ -80,19 +94,93 @@ public class TorreyScaleController {
      * Desconecta del puerto serial
      */
     public void disconnect() {
+        // Detener polling primero
+        stopPolling();
+
         if (serialPort != null && serialPort.isOpen()) {
             serialPort.closePort();
             isConnected = false;
+            lastReading = WeightReading.zero();
             logger.info("Desconectado de la báscula");
         }
     }
 
     /**
-     * Lee el peso actual de la báscula
+     * Inicia el hilo de polling dedicado
+     */
+    private void startPolling() {
+        if (pollingActive) {
+            return;
+        }
+
+        pollingActive = true;
+        pollingThread = new Thread(() -> {
+            logger.info("Iniciando polling de báscula cada {}ms", POLLING_INTERVAL);
+            while (pollingActive && isConnected) {
+                try {
+                    lastReading = readWeightInternal();
+                    lastReadTime = System.currentTimeMillis();
+                    TimeUnit.MILLISECONDS.sleep(POLLING_INTERVAL);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                } catch (Exception e) {
+                    logger.warn("Error en polling: {}", e.getMessage());
+                }
+            }
+            logger.info("Polling de báscula detenido");
+        }, "scale-polling");
+        pollingThread.setDaemon(true);
+        pollingThread.start();
+    }
+
+    /**
+     * Detiene el hilo de polling
+     */
+    private void stopPolling() {
+        pollingActive = false;
+        if (pollingThread != null) {
+            pollingThread.interrupt();
+            try {
+                pollingThread.join(1000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            pollingThread = null;
+        }
+    }
+
+    /**
+     * Devuelve el último peso leído (desde caché)
+     * Respuesta instantánea - no bloquea
      */
     public WeightReading readWeight() {
         if (!isConnected || serialPort == null || !serialPort.isOpen()) {
-            logger.error("No hay conexión con la báscula");
+            return WeightReading.error("No conectado");
+        }
+
+        // Si aún no hay datos (polling recién iniciado), devolver cero
+        if (lastReadTime == 0) {
+            return WeightReading.zero();
+        }
+
+        // Verificar si el último dato es muy antiguo (más de 3 segundos)
+        // Esto indica que el hilo de polling se detuvo o hay un problema
+        if (System.currentTimeMillis() - lastReadTime > 3000) {
+            logger.warn("Datos de báscula desactualizados ({}ms)", System.currentTimeMillis() - lastReadTime);
+            // Devolver último valor conocido pero marcado como inestable
+            return new WeightReading(lastReading.weight(), lastReading.unit(), false, true, null);
+        }
+
+        return lastReading;
+    }
+
+    /**
+     * Lee el peso directamente del puerto serial (uso interno)
+     * Solo llamado por el hilo de polling
+     */
+    private WeightReading readWeightInternal() {
+        if (!isConnected || serialPort == null || !serialPort.isOpen()) {
             return WeightReading.error("No conectado");
         }
 

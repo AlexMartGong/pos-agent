@@ -96,7 +96,7 @@ public class ScaleRestServer {
      */
     private class WeightHandler implements HttpHandler {
         @Override
-        public void handle(HttpExchange exchange) throws IOException {
+        public void handle(HttpExchange exchange) {
             // Solo permitir GET
             if (!"GET".equals(exchange.getRequestMethod())) {
                 sendResponse(exchange, 405, createError());
@@ -152,7 +152,7 @@ public class ScaleRestServer {
      */
     private class StatusHandler implements HttpHandler {
         @Override
-        public void handle(HttpExchange exchange) throws IOException {
+        public void handle(HttpExchange exchange) {
             if (!"GET".equals(exchange.getRequestMethod())) {
                 sendResponse(exchange, 405, createError());
                 return;
@@ -179,7 +179,7 @@ public class ScaleRestServer {
      */
     private class ConnectHandler implements HttpHandler {
         @Override
-        public void handle(HttpExchange exchange) throws IOException {
+        public void handle(HttpExchange exchange) {
             if (!"POST".equals(exchange.getRequestMethod())) {
                 sendResponse(exchange, 405, createError());
                 return;
@@ -226,7 +226,7 @@ public class ScaleRestServer {
      */
     private class DisconnectHandler implements HttpHandler {
         @Override
-        public void handle(HttpExchange exchange) throws IOException {
+        public void handle(HttpExchange exchange) {
             if (!"POST".equals(exchange.getRequestMethod())) {
                 sendResponse(exchange, 405, createError());
                 return;
@@ -254,7 +254,7 @@ public class ScaleRestServer {
      */
     private class PortsHandler implements HttpHandler {
         @Override
-        public void handle(HttpExchange exchange) throws IOException {
+        public void handle(HttpExchange exchange) {
             if (!"GET".equals(exchange.getRequestMethod())) {
                 sendResponse(exchange, 405, createError());
                 return;
@@ -283,22 +283,30 @@ public class ScaleRestServer {
     /**
      * Envía una respuesta JSON
      */
-    private void sendResponse(HttpExchange exchange, int statusCode, Map<String, Object> data) throws IOException {
-        // Agregar headers CORS
-        exchange.getResponseHeaders().add("Access-Control-Allow-Origin", "*");
-        exchange.getResponseHeaders().add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-        exchange.getResponseHeaders().add("Access-Control-Allow-Headers", "Content-Type");
-        exchange.getResponseHeaders().add("Content-Type", "application/json");
+    private void sendResponse(HttpExchange exchange, int statusCode, Map<String, Object> data) {
+        try {
+            // Agregar headers CORS
+            exchange.getResponseHeaders().add("Access-Control-Allow-Origin", "*");
+            exchange.getResponseHeaders().add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+            exchange.getResponseHeaders().add("Access-Control-Allow-Headers", "Content-Type");
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
 
-        // Convertir a JSON
-        String jsonResponse = objectMapper.writeValueAsString(data);
-        byte[] responseBytes = jsonResponse.getBytes(StandardCharsets.UTF_8);
+            // Convertir a JSON
+            String jsonResponse = objectMapper.writeValueAsString(data);
+            byte[] responseBytes = jsonResponse.getBytes(StandardCharsets.UTF_8);
 
-        // Enviar respuesta
-        exchange.sendResponseHeaders(statusCode, responseBytes.length);
-        OutputStream os = exchange.getResponseBody();
-        os.write(responseBytes);
-        os.close();
+            // Enviar respuesta
+            exchange.sendResponseHeaders(statusCode, responseBytes.length);
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(responseBytes);
+            }
+        } catch (IOException e) {
+            // Ignorar "Broken pipe" - el cliente cerró la conexión antes de recibir respuesta
+            // Esto es normal con polling frecuente
+            if (!e.getMessage().contains("Tubería rota") && !e.getMessage().contains("Broken pipe")) {
+                logger.warn("Error enviando respuesta: {}", e.getMessage());
+            }
+        }
     }
 
     /**
