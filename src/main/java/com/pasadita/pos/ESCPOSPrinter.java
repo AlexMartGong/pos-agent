@@ -3,6 +3,9 @@ package com.pasadita.pos;
 import com.pasadita.pos.dto.SaleDetailDTO;
 import com.pasadita.pos.dto.TicketDTO;
 
+import javax.print.*;
+import javax.print.attribute.HashPrintRequestAttributeSet;
+import javax.print.attribute.PrintRequestAttributeSet;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -14,14 +17,18 @@ import java.util.List;
 
 /**
  * Clase para enviar comandos ESC/POS a impresoras térmicas Epson.
- * Usa escritura directa al dispositivo como archivo (/dev/usb/lpX).
- *
+ * Soporta dos modos de impresión según el sistema operativo:
+ * - Linux: Escritura directa al dispositivo (/dev/usb/lpX)
+ * - Windows: Usa PrintService de Java con el nombre de impresora instalada
  * Compatible con: Epson TM-T88V y modelos similares.
  */
 public class ESCPOSPrinter {
 
-    // Ruta por defecto del dispositivo de impresora
+    // Ruta por defecto del dispositivo de impresora (Linux)
     private static final String DEFAULT_PRINTER_PATH = "/dev/usb/lp0";
+
+    // Detección del sistema operativo
+    private static final boolean IS_WINDOWS = System.getProperty("os.name").toLowerCase().contains("windows");
 
     // Comandos ESC/POS básicos
     private static final byte[] INIT = {0x1B, 0x40};                          // Inicializar impresora
@@ -50,10 +57,30 @@ public class ESCPOSPrinter {
     private final String businessName;
     private final String businessAddress;
     private final String businessPhone;
-    private final String printerPath;
+    private final String printerPath;      // Para Linux (/dev/usb/lpX)
+    private final String printerName;      // Para Windows (nombre de impresora instalada)
 
     /**
-     * Constructor completo con configuración del negocio y ruta de impresora.
+     * Constructor completo con configuración del negocio y configuración de impresora.
+     *
+     * @param businessName    Nombre del negocio
+     * @param businessAddress Dirección del negocio
+     * @param businessPhone   Teléfono del negocio
+     * @param printerPath     Ruta del dispositivo de impresora para Linux (ej: /dev/usb/lp5)
+     * @param printerName     Nombre de impresora instalada para Windows (ej: "EPSON TM-T88V Receipt")
+     */
+    public ESCPOSPrinter(String businessName, String businessAddress, String businessPhone,
+                         String printerPath, String printerName) {
+        this.businessName = businessName;
+        this.businessAddress = businessAddress;
+        this.businessPhone = businessPhone;
+        this.printerPath = printerPath != null ? printerPath : DEFAULT_PRINTER_PATH;
+        this.printerName = printerName;
+    }
+
+    /**
+     * Constructor con configuración del negocio y ruta de impresora (compatibilidad).
+     * Para Windows, intentará usar el printerPath como nombre de impresora si no es un path de Linux.
      *
      * @param businessName    Nombre del negocio
      * @param businessAddress Dirección del negocio
@@ -61,10 +88,7 @@ public class ESCPOSPrinter {
      * @param printerPath     Ruta del dispositivo de impresora (ej: /dev/usb/lp5)
      */
     public ESCPOSPrinter(String businessName, String businessAddress, String businessPhone, String printerPath) {
-        this.businessName = businessName;
-        this.businessAddress = businessAddress;
-        this.businessPhone = businessPhone;
-        this.printerPath = printerPath != null ? printerPath : DEFAULT_PRINTER_PATH;
+        this(businessName, businessAddress, businessPhone, printerPath, null);
     }
 
     /**
@@ -75,18 +99,20 @@ public class ESCPOSPrinter {
      * @param businessPhone   Teléfono del negocio
      */
     public ESCPOSPrinter(String businessName, String businessAddress, String businessPhone) {
-        this(businessName, businessAddress, businessPhone, DEFAULT_PRINTER_PATH);
+        this(businessName, businessAddress, businessPhone, DEFAULT_PRINTER_PATH, null);
     }
 
     /**
      * Constructor simple con valores por defecto.
      */
     public ESCPOSPrinter() {
-        this("LA PASADITA", "", "", DEFAULT_PRINTER_PATH);
+        this("LA PASADITA", "", "", DEFAULT_PRINTER_PATH, null);
     }
 
     /**
-     * Imprime un ticket completo escribiendo directamente al dispositivo.
+     * Imprime un ticket completo.
+     * En Linux: escribe directamente al dispositivo (/dev/usb/lpX)
+     * En Windows: usa PrintService con el nombre de impresora instalada
      *
      * @param ticket DTO del ticket a imprimir
      * @throws PrinterException Si hay error al imprimir
@@ -98,17 +124,113 @@ public class ESCPOSPrinter {
         // 1. Generar comandos ESC/POS
         byte[] commands = generateESCPOS(ticket);
 
-        System.out.println("Escribiendo a impresora: " + printerPath);
+        // 2. Imprimir según el sistema operativo
+        if (IS_WINDOWS) {
+            printToWindowsPrinter(commands, "Ticket #" + ticket.getId());
+        } else {
+            printToLinuxDevice(commands, "Ticket #" + ticket.getId());
+        }
+    }
 
-        // 2. Escribir directamente al dispositivo como archivo
+    /**
+     * Imprime datos a un dispositivo de impresora en Linux.
+     *
+     * @param data        Bytes a enviar a la impresora
+     * @param description Descripción del trabajo de impresión
+     * @throws PrinterException Si hay error al imprimir
+     */
+    private void printToLinuxDevice(byte[] data, String description) throws PrinterException {
+        System.out.println("Escribiendo a impresora (Linux): " + printerPath);
+
         try (FileOutputStream fos = new FileOutputStream(printerPath)) {
-            fos.write(commands);
+            fos.write(data);
             fos.flush();
-            System.out.println("✅ Ticket #" + ticket.getId() + " enviado a impresora correctamente");
+            System.out.println("[OK] " + description + " enviado a impresora correctamente");
         } catch (IOException e) {
-            System.err.println("❌ Error escribiendo a impresora: " + e.getMessage());
+            System.err.println("[ERROR] Error escribiendo a impresora: " + e.getMessage());
             throw new PrinterException("No se pudo escribir en " + printerPath + ": " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * Imprime datos usando PrintService de Java en Windows.
+     *
+     * @param data        Bytes a enviar a la impresora
+     * @param description Descripción del trabajo de impresión
+     * @throws PrinterException Si hay error al imprimir
+     */
+    private void printToWindowsPrinter(byte[] data, String description) throws PrinterException {
+        String effectivePrinterName = getEffectivePrinterName();
+        System.out.println("Imprimiendo a impresora (Windows): " + effectivePrinterName);
+
+        PrintService printService = findPrintService(effectivePrinterName);
+        if (printService == null) {
+            throw new PrinterException("Impresora no encontrada: " + effectivePrinterName +
+                    ". Impresoras disponibles: " + getAvailablePrinters());
+        }
+
+        try {
+            DocPrintJob printJob = printService.createPrintJob();
+            DocFlavor flavor = DocFlavor.BYTE_ARRAY.AUTOSENSE;
+            Doc doc = new SimpleDoc(data, flavor, null);
+            PrintRequestAttributeSet attributes = new HashPrintRequestAttributeSet();
+
+            printJob.print(doc, attributes);
+            System.out.println("[OK] " + description + " enviado a impresora correctamente");
+        } catch (javax.print.PrintException e) {
+            System.err.println("[ERROR] Error de impresión: " + e.getMessage());
+            throw new PrinterException("Error al imprimir en " + effectivePrinterName + ": " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Obtiene el nombre efectivo de la impresora para Windows.
+     * Prioriza printerName, luego usa printerPath si no parece ser un path de Linux.
+     */
+    private String getEffectivePrinterName() {
+        if (printerName != null && !printerName.isEmpty()) {
+            return printerName;
+        }
+        // Si printerPath no es un path de Linux, usarlo como nombre de impresora
+        if (printerPath != null && !printerPath.startsWith("/dev/")) {
+            return printerPath;
+        }
+        return null;
+    }
+
+    /**
+     * Busca un PrintService por nombre de impresora.
+     *
+     * @param printerName Nombre de la impresora a buscar
+     * @return PrintService encontrado o null si no existe
+     */
+    private PrintService findPrintService(String printerName) {
+        if (printerName == null) {
+            return null;
+        }
+        PrintService[] services = PrintServiceLookup.lookupPrintServices(null, null);
+        for (PrintService service : services) {
+            if (service.getName().equalsIgnoreCase(printerName) ||
+                    service.getName().toLowerCase().contains(printerName.toLowerCase())) {
+                return service;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Obtiene lista de impresoras disponibles en el sistema.
+     *
+     * @return String con nombres de impresoras separados por coma
+     */
+    public String getAvailablePrinters() {
+        PrintService[] services = PrintServiceLookup.lookupPrintServices(null, null);
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < services.length; i++) {
+            if (i > 0) sb.append(", ");
+            sb.append(services[i].getName());
+        }
+        return sb.toString();
     }
 
     /**
@@ -337,7 +459,7 @@ public class ESCPOSPrinter {
             buffer.write(BOLD_OFF);
             buffer.write(LINE_FEED);
             // La dirección puede ser larga, escribirla en líneas separadas si es necesario
-            writeWrappedText(buffer, ticket.getDeliveryAddress(), TICKET_WIDTH);
+            writeWrappedText(buffer, ticket.getDeliveryAddress());
         }
 
         buffer.write(LINE_FEED);
@@ -360,12 +482,12 @@ public class ESCPOSPrinter {
     /**
      * Escribe texto largo dividido en múltiples líneas.
      */
-    private void writeWrappedText(ByteArrayOutputStream buffer, String text, int maxWidth) throws IOException {
+    private void writeWrappedText(ByteArrayOutputStream buffer, String text) throws IOException {
         if (text == null || text.isEmpty()) return;
 
         int start = 0;
         while (start < text.length()) {
-            int end = Math.min(start + maxWidth, text.length());
+            int end = Math.min(start + ESCPOSPrinter.TICKET_WIDTH, text.length());
             buffer.write(text.substring(start, end).getBytes(StandardCharsets.ISO_8859_1));
             buffer.write(LINE_FEED);
             start = end;
@@ -434,7 +556,7 @@ public class ESCPOSPrinter {
             buffer.write("NOTAS:".getBytes(StandardCharsets.ISO_8859_1));
             buffer.write(BOLD_OFF);
             buffer.write(LINE_FEED);
-            writeWrappedText(buffer, ticket.getNotes(), TICKET_WIDTH);
+            writeWrappedText(buffer, ticket.getNotes());
         }
 
         buffer.write(LINE_FEED);
@@ -562,6 +684,9 @@ public class ESCPOSPrinter {
     public void printTestPage() throws PrinterException, IOException {
         System.out.println("Generando página de prueba...");
 
+        // Determinar el nombre del dispositivo/impresora para mostrar
+        String printerInfo = IS_WINDOWS ? getEffectivePrinterName() : printerPath;
+
         // Generar página de prueba
         ByteArrayOutputStream buffer = new ByteArrayOutputStream();
         buffer.write(INIT);
@@ -583,7 +708,9 @@ public class ESCPOSPrinter {
         buffer.write(LINE_FEED);
         buffer.write(LINE_FEED);
 
-        buffer.write(("Dispositivo: " + printerPath).getBytes(StandardCharsets.ISO_8859_1));
+        buffer.write(("Sistema: " + (IS_WINDOWS ? "Windows" : "Linux")).getBytes(StandardCharsets.ISO_8859_1));
+        buffer.write(LINE_FEED);
+        buffer.write(("Impresora: " + printerInfo).getBytes(StandardCharsets.ISO_8859_1));
         buffer.write(LINE_FEED);
         buffer.write(LINE_FEED);
 
@@ -594,35 +721,56 @@ public class ESCPOSPrinter {
 
         buffer.write(CUT_PAPER_FEED);
 
-        System.out.println("Escribiendo página de prueba a: " + printerPath);
-
-        try (FileOutputStream fos = new FileOutputStream(printerPath)) {
-            fos.write(buffer.toByteArray());
-            fos.flush();
-            System.out.println("✅ Página de prueba impresa correctamente");
-        } catch (IOException e) {
-            System.err.println("❌ Error escribiendo página de prueba: " + e.getMessage());
-            throw new PrinterException("No se pudo escribir en " + printerPath + ": " + e.getMessage(), e);
+        // Imprimir según el sistema operativo
+        if (IS_WINDOWS) {
+            printToWindowsPrinter(buffer.toByteArray(), "Pagina de prueba");
+        } else {
+            printToLinuxDevice(buffer.toByteArray(), "Pagina de prueba");
         }
     }
 
     /**
-     * Verifica si la impresora está disponible (el archivo de dispositivo existe y es escribible).
+     * Verifica si la impresora está disponible.
+     * En Linux: verifica que el archivo de dispositivo exista y sea escribible.
+     * En Windows: verifica que exista un PrintService con el nombre configurado.
      *
      * @return true si la impresora está disponible
      */
     public boolean isAvailable() {
-        File printerDevice = new File(printerPath);
-        return printerDevice.exists() && printerDevice.canWrite();
+        if (IS_WINDOWS) {
+            String effectiveName = getEffectivePrinterName();
+            return effectiveName != null && findPrintService(effectiveName) != null;
+        } else {
+            File printerDevice = new File(printerPath);
+            return printerDevice.exists() && printerDevice.canWrite();
+        }
     }
 
     /**
-     * Obtiene la ruta del dispositivo de impresora configurado.
+     * Obtiene la ruta del dispositivo de impresora configurado (Linux).
      *
      * @return Ruta del dispositivo (ej: /dev/usb/lp5)
      */
     public String getPrinterPath() {
         return printerPath;
+    }
+
+    /**
+     * Obtiene el nombre de la impresora configurada (Windows).
+     *
+     * @return Nombre de la impresora
+     */
+    public String getPrinterName() {
+        return printerName;
+    }
+
+    /**
+     * Indica si el sistema operativo actual es Windows.
+     *
+     * @return true si es Windows
+     */
+    public static boolean isWindows() {
+        return IS_WINDOWS;
     }
 
     /**

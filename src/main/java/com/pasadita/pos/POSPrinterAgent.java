@@ -103,7 +103,7 @@ public class POSPrinterAgent extends WebSocketClient {
             log("DEBUG", "Mensaje recibido: " + message.substring(0, Math.min(200, message.length())));
         } catch (Exception e) {
             log("ERROR", "Error procesando mensaje: " + e.getMessage());
-            e.printStackTrace();
+            e.fillInStackTrace();
         }
     }
 
@@ -135,7 +135,7 @@ public class POSPrinterAgent extends WebSocketClient {
         } catch (Exception e) {
             errorMessage = "Error inesperado al imprimir: " + e.getMessage();
             log("ERROR", errorMessage);
-            e.printStackTrace();
+            e.fillInStackTrace();
         }
 
         // Enviar confirmación de vuelta al servidor
@@ -244,21 +244,6 @@ public class POSPrinterAgent extends WebSocketClient {
     }
 
     /**
-     * Imprime una página de prueba.
-     */
-    public void printTestPage() {
-        try {
-            log("INFO", "Imprimiendo página de prueba...");
-            printer.printTestPage();
-            log("INFO", "Página de prueba impresa correctamente");
-        } catch (IOException e) {
-            log("ERROR", "Error imprimiendo página de prueba: " + e.getMessage());
-        } catch (ESCPOSPrinter.PrinterException e) {
-            log("ERROR", "Error de impresora: " + e.getMessage());
-        }
-    }
-
-    /**
      * Registra un mensaje con timestamp.
      *
      * @param level   Nivel del log (INFO, WARN, ERROR, DEBUG)
@@ -285,6 +270,7 @@ public class POSPrinterAgent extends WebSocketClient {
         String serverUrl = getConfig("SERVER_URL", "server.url", fileConfig, DEFAULT_SERVER_URL);
         String stationId = getConfig("STATION_ID", "station.id", fileConfig, DEFAULT_STATION_ID);
         String printerPath = getConfig("PRINTER_PATH", "printer.path", fileConfig, DEFAULT_PRINTER_PATH);
+        String printerName = getConfig("PRINTER_NAME", "printer.name", fileConfig, "");
         String businessName = getConfig("BUSINESS_NAME", "business.name", fileConfig, "LA PASADITA");
         String businessAddress = getConfig("BUSINESS_ADDRESS", "business.address", fileConfig, "");
         String businessPhone = getConfig("BUSINESS_PHONE", "business.phone", fileConfig, "");
@@ -300,7 +286,12 @@ public class POSPrinterAgent extends WebSocketClient {
         log("INFO", "Configuración:");
         log("INFO", "  Station ID: " + stationId);
         log("INFO", "  Server URL: " + fullUrl);
-        log("INFO", "  Printer Path: " + printerPath);
+        log("INFO", "  Sistema Operativo: " + (ESCPOSPrinter.isWindows() ? "Windows" : "Linux"));
+        if (ESCPOSPrinter.isWindows()) {
+            log("INFO", "  Printer Name (Windows): " + (printerName.isEmpty() ? "(no configurado)" : printerName));
+        } else {
+            log("INFO", "  Printer Path (Linux): " + printerPath);
+        }
         log("INFO", "  Business: " + businessName);
         log("INFO", "  Scale Port: " + scalePort);
         log("INFO", "  Scale Enabled: " + scaleEnabled);
@@ -310,7 +301,7 @@ public class POSPrinterAgent extends WebSocketClient {
         // Verificar si se solicita página de prueba
         for (String arg : args) {
             if ("--test".equals(arg) || "-t".equals(arg)) {
-                ESCPOSPrinter testPrinter = new ESCPOSPrinter(businessName, businessAddress, businessPhone, printerPath);
+                ESCPOSPrinter testPrinter = new ESCPOSPrinter(businessName, businessAddress, businessPhone, printerPath, printerName);
                 try {
                     log("INFO", "Imprimiendo página de prueba...");
                     testPrinter.printTestPage();
@@ -325,7 +316,7 @@ public class POSPrinterAgent extends WebSocketClient {
         }
 
         // Crear instancias
-        ESCPOSPrinter printer = new ESCPOSPrinter(businessName, businessAddress, businessPhone, printerPath);
+        ESCPOSPrinter printer = new ESCPOSPrinter(businessName, businessAddress, businessPhone, printerPath, printerName);
         log("INFO", "Impresora disponible: " + printer.isAvailable());
 
         // Iniciar servidor REST de báscula
