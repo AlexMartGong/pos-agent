@@ -1,0 +1,25 @@
+<service>
+  <id>POSPrinterAgent</id>
+  <name>POS Printer Agent</name>
+  <description>Agente de impresion para terminales POS - La Pasadita</description>
+  <executable>java</executable>
+  <arguments>-Xmx256m -jar "%BASE%\pos-printer-agent.jar"</arguments>
+  <workingdirectory>%BASE%</workingdirectory>
+
+  <!-- Logging -->
+  <log mode="roll-by-size">
+    <sizeThreshold>10240</sizeThreshold>
+    <keepFiles>3</keepFiles>
+  </log>
+
+  <!-- Auto restart on failure -->
+  <onfailure action="restart" delay="10 sec"/>
+  <onfailure action="restart" delay="20 sec"/>
+  <onfailure action="restart" delay="30 sec"/>
+
+  <!-- Start automatically -->
+  <startmode>Automatic</startmode>
+
+  <!-- Stop timeout -->
+  <stoptimeout>15 sec</stoptimeout>
+</service>

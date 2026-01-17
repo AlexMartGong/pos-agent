@@ -26,13 +26,50 @@ java -jar target/pos-printer-agent.jar /path/to/config.properties
 java -jar target/pos-printer-agent.jar --test
 ```
 
+### Build Windows Installer
+```bash
+# En Windows, ejecutar:
+build-installer.bat
+
+# Genera: target/installer/POS Printer Agent-1.0.0.exe
+```
+El instalador incluye el Java runtime, el usuario no necesita instalar Java.
+
+### Build Windows Service Package
+```bash
+# Desde Linux (Ubuntu):
+./build-service-package.sh
+
+# Desde Windows:
+build-service-package.bat
+
+# Genera: target/pos-printer-agent-service/
+#   - pos-printer-agent.exe (WinSW wrapper)
+#   - pos-printer-agent.jar
+#   - pos-printer-agent.xml (config del servicio)
+#   - config.properties
+#   - install-service.bat
+#   - uninstall-service.bat
+```
+
+Para instalar como servicio en Windows:
+1. Copia la carpeta `pos-printer-agent-service` a la PC destino
+2. Edita `config.properties` con la configuración correcta
+3. Ejecuta `install-service.bat` como Administrador
+
+El servicio:
+- Inicia automáticamente con Windows
+- Se reinicia automáticamente si falla
+- Logs en `pos-printer-agent.out.log`
+
 ### Configuration
 Configuration priority: Environment variables > `config.properties` > defaults
 
 Key properties in `config.properties`:
 - `server.url` - WebSocket server URL (e.g., `ws://localhost:8080/ws/printer`)
 - `station.id` - Unique POS station identifier
-- `printer.path` - Printer device path (`/dev/usb/lp0` on Linux, `COM1` or `LPT1` on Windows)
+- `printer.path` - Printer device path for Linux (`/dev/usb/lp0`)
+- `printer.name` - Printer name for Windows (e.g., `EPSON TM-T88V Receipt`)
 - `business.name`, `business.address`, `business.phone` - Business header info
 - `scale.port` - Serial port for Torrey scale (`/dev/ttyACM0` on Linux, `COM1` on Windows)
 - `scale.enabled` - Enable/disable scale REST server (true/false)
@@ -54,7 +91,9 @@ Key properties in `config.properties`:
 - Auto-detects ticket type based on `deliveryOrderId` and `deliveryAddress`:
   - **Cash register ticket**: Standard sale receipt
   - **Delivery ticket**: Includes customer details, delivery address, payment status prominently displayed
-- Writes directly to printer device file (no driver required)
+- **Cross-platform printing**:
+  - **Linux**: Writes directly to device file (`/dev/usb/lpX`) - no driver required
+  - **Windows**: Uses Java PrintService with installed printer name - stable, no port changes
 - Supports 80mm thermal printers (42 chars/line), PC850 charset for Spanish
 
 **Scale Integration** (`src/main/java/com/pasadita/pos/scale/`)
