@@ -286,6 +286,7 @@ public class POSPrinterAgent extends WebSocketClient {
         log("INFO", "Configuración:");
         log("INFO", "  Station ID: " + stationId);
         log("INFO", "  Server URL: " + fullUrl);
+        log("INFO", "  Conexión segura (WSS): " + serverUrl.startsWith("wss://"));
         log("INFO", "  Sistema Operativo: " + (ESCPOSPrinter.isWindows() ? "Windows" : "Linux"));
         if (ESCPOSPrinter.isWindows()) {
             log("INFO", "  Printer Name (Windows): " + (printerName.isEmpty() ? "(no configurado)" : printerName));

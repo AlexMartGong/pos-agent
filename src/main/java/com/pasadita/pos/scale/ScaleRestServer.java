@@ -97,6 +97,9 @@ public class ScaleRestServer {
     private class WeightHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) {
+            // Manejar CORS preflight
+            if (handleCorsPreflightIfOptions(exchange)) return;
+
             // Solo permitir GET
             if (!"GET".equals(exchange.getRequestMethod())) {
                 sendResponse(exchange, 405, createError());
@@ -153,6 +156,9 @@ public class ScaleRestServer {
     private class StatusHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) {
+            // Manejar CORS preflight
+            if (handleCorsPreflightIfOptions(exchange)) return;
+
             if (!"GET".equals(exchange.getRequestMethod())) {
                 sendResponse(exchange, 405, createError());
                 return;
@@ -180,6 +186,9 @@ public class ScaleRestServer {
     private class ConnectHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) {
+            // Manejar CORS preflight
+            if (handleCorsPreflightIfOptions(exchange)) return;
+
             if (!"POST".equals(exchange.getRequestMethod())) {
                 sendResponse(exchange, 405, createError());
                 return;
@@ -227,6 +236,9 @@ public class ScaleRestServer {
     private class DisconnectHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) {
+            // Manejar CORS preflight
+            if (handleCorsPreflightIfOptions(exchange)) return;
+
             if (!"POST".equals(exchange.getRequestMethod())) {
                 sendResponse(exchange, 405, createError());
                 return;
@@ -255,6 +267,9 @@ public class ScaleRestServer {
     private class PortsHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) {
+            // Manejar CORS preflight
+            if (handleCorsPreflightIfOptions(exchange)) return;
+
             if (!"GET".equals(exchange.getRequestMethod())) {
                 sendResponse(exchange, 405, createError());
                 return;
@@ -280,13 +295,16 @@ public class ScaleRestServer {
         }
     }
 
+    // Origen permitido para CORS (frontend de producción)
+    private static final String ALLOWED_ORIGIN = "https://lapasadita.app";
+
     /**
      * Envía una respuesta JSON
      */
     private void sendResponse(HttpExchange exchange, int statusCode, Map<String, Object> data) {
         try {
-            // Agregar headers CORS
-            exchange.getResponseHeaders().add("Access-Control-Allow-Origin", "*");
+            // Agregar headers CORS - solo permitir origen de producción
+            exchange.getResponseHeaders().add("Access-Control-Allow-Origin", ALLOWED_ORIGIN);
             exchange.getResponseHeaders().add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
             exchange.getResponseHeaders().add("Access-Control-Allow-Headers", "Content-Type");
             exchange.getResponseHeaders().add("Content-Type", "application/json");
@@ -317,5 +335,25 @@ public class ScaleRestServer {
         error.put("success", false);
         error.put("error", "Método no permitido");
         return error;
+    }
+
+    /**
+     * Maneja solicitudes OPTIONS preflight para CORS
+     * @return true si fue una solicitud OPTIONS (ya manejada), false si debe continuar procesando
+     */
+    private boolean handleCorsPreflightIfOptions(HttpExchange exchange) {
+        if ("OPTIONS".equals(exchange.getRequestMethod())) {
+            try {
+                exchange.getResponseHeaders().add("Access-Control-Allow-Origin", ALLOWED_ORIGIN);
+                exchange.getResponseHeaders().add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+                exchange.getResponseHeaders().add("Access-Control-Allow-Headers", "Content-Type");
+                exchange.getResponseHeaders().add("Access-Control-Max-Age", "86400"); // Cache preflight 24h
+                exchange.sendResponseHeaders(204, -1); // No content
+            } catch (IOException e) {
+                logger.warn("Error enviando respuesta preflight: {}", e.getMessage());
+            }
+            return true;
+        }
+        return false;
     }
 }

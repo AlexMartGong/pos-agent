@@ -170,6 +170,23 @@ sudo usermod -a -G dialout $USER
 - jSerialComm 2.10.4 - Serial port communication for scale
 - SLF4J 2.0.9 - Logging
 
+## Environment Variables
+
+Configuration can be set via environment variables (takes precedence over `config.properties`):
+
+| Environment Variable | Property Key | Description |
+|---------------------|--------------|-------------|
+| `SERVER_URL` | `server.url` | WebSocket server URL |
+| `STATION_ID` | `station.id` | POS station identifier |
+| `PRINTER_PATH` | `printer.path` | Linux device path |
+| `PRINTER_NAME` | `printer.name` | Windows printer name |
+| `BUSINESS_NAME` | `business.name` | Business name for header |
+| `BUSINESS_ADDRESS` | `business.address` | Business address |
+| `BUSINESS_PHONE` | `business.phone` | Business phone |
+| `SCALE_PORT` | `scale.port` | Serial port for scale |
+| `SCALE_ENABLED` | `scale.enabled` | Enable scale REST server |
+| `SCALE_AUTO_CONNECT` | `scale.autoConnect` | Auto-connect scale on startup |
+
 ## Key Design Patterns
 
 - **Auto-reconnection**: 5-second delay retry on WebSocket disconnect/error
@@ -178,3 +195,17 @@ sudo usermod -a -G dialout $USER
 - **Ticket width**: 42 characters for 80mm printers
 - **Configuration cascade**: ENV vars override properties file, which overrides defaults
 - **Shutdown hook**: Graceful cleanup on SIGTERM/SIGINT
+
+## Project Structure
+
+```
+src/main/java/com/pasadita/pos/
+├── POSPrinterAgent.java      # Main class, WebSocket client
+├── ESCPOSPrinter.java        # ESC/POS command generator
+├── dto/
+│   ├── TicketDTO.java        # Ticket data transfer object
+│   └── SaleDetailDTO.java    # Sale line item DTO
+└── scale/
+    ├── TorreyScaleController.java  # Serial communication with scale
+    └── ScaleRestServer.java        # HTTP REST API for scale
+```
