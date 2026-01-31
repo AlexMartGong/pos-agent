@@ -579,7 +579,7 @@ public class ESCPOSPrinter {
             buffer.write(LINE_FEED);
         }
         if (businessPhone != null && !businessPhone.isEmpty()) {
-            buffer.write(("Tel: " + businessPhone).getBytes(StandardCharsets.ISO_8859_1));
+            buffer.write(("Whatsapp: " + businessPhone).getBytes(StandardCharsets.ISO_8859_1));
             buffer.write(LINE_FEED);
         }
         buffer.write(LINE_FEED);
@@ -592,23 +592,26 @@ public class ESCPOSPrinter {
             return;
         }
 
-        // Encabezado de columnas
+        // Encabezado de columnas: CANT | PRODUCTO | PRECIO | TOTAL
         buffer.write(BOLD_ON);
-        buffer.write(formatLine("PRODUCTO", "CANT", "PRECIO").getBytes(StandardCharsets.ISO_8859_1));
+        buffer.write(formatDetailLine("CANT", "PRODUCTO", "PRECIO", "TOTAL").getBytes(StandardCharsets.ISO_8859_1));
         buffer.write(BOLD_OFF);
+        buffer.write(LINE_FEED);
+        buffer.write(SEPARATOR.getBytes(StandardCharsets.ISO_8859_1));
         buffer.write(LINE_FEED);
 
         for (SaleDetailDTO detail : details) {
-            // Nombre del producto (puede ocupar varias líneas)
+            // Nombre del producto (truncado si es necesario)
             String productName = detail.getProductName();
-            if (productName != null && productName.length() > 24) {
-                productName = productName.substring(0, 24);
+            if (productName != null && productName.length() > 18) {
+                productName = productName.substring(0, 18);
             }
 
             String qty = formatQuantity(detail.getQuantity());
-            String price = formatPrice(detail.getSubtotal());
+            String unitPrice = formatPrice(detail.getUnitPrice());
+            String total = formatPrice(detail.getSubtotal());
 
-            buffer.write(formatLine(productName, qty, price).getBytes(StandardCharsets.ISO_8859_1));
+            buffer.write(formatDetailLine(qty, productName, unitPrice, total).getBytes(StandardCharsets.ISO_8859_1));
             buffer.write(LINE_FEED);
         }
     }
@@ -654,6 +657,32 @@ public class ESCPOSPrinter {
         if (col3.length() > col3Width) col3 = col3.substring(0, col3Width);
 
         return String.format("%-" + col1Width + "s %" + col2Width + "s %" + col3Width + "s", col1, col2, col3);
+    }
+
+    /**
+     * Formatea una línea con cuatro columnas para los detalles de venta.
+     * Columnas: CANT | PRODUCTO | PRECIO | TOTAL
+     * Ancho total: 42 caracteres (típico para impresora de 80mm)
+     */
+    private String formatDetailLine(String cant, String producto, String precio, String total) {
+        int cantWidth = 5;      // Cantidad (ej: "10")
+        int productoWidth = 18; // Nombre del producto
+        int precioWidth = 8;    // Precio unitario (ej: "999.99")
+        int totalWidth = 8;     // Total (ej: "9999.99")
+
+        cant = cant != null ? cant : "";
+        producto = producto != null ? producto : "";
+        precio = precio != null ? precio : "";
+        total = total != null ? total : "";
+
+        if (cant.length() > cantWidth) cant = cant.substring(0, cantWidth);
+        if (producto.length() > productoWidth) producto = producto.substring(0, productoWidth);
+        if (precio.length() > precioWidth) precio = precio.substring(0, precioWidth);
+        if (total.length() > totalWidth) total = total.substring(0, totalWidth);
+
+        // Formato: CANT alineado derecha, PRODUCTO alineado izquierda, PRECIO y TOTAL alineados derecha
+        return String.format("%" + cantWidth + "s %-" + productoWidth + "s %" + precioWidth + "s %" + totalWidth + "s",
+                cant, producto, precio, total);
     }
 
     /**
@@ -788,6 +817,7 @@ public class ESCPOSPrinter {
 
     /**
      * Excepción de compatibilidad (alias para PrinterException).
+     *
      * @deprecated Usar PrinterException en su lugar
      */
     @Deprecated
