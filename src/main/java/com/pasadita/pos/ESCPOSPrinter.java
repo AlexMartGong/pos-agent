@@ -31,26 +31,26 @@ public class ESCPOSPrinter {
     private static final boolean IS_WINDOWS = System.getProperty("os.name").toLowerCase().contains("windows");
 
     // Comandos ESC/POS básicos
-    private static final byte[] INIT = {0x1B, 0x40};                          // Inicializar impresora
-    private static final byte[] CUT_PAPER = {0x1D, 0x56, 0x00};               // Cortar papel completo
-    private static final byte[] CUT_PAPER_PARTIAL = {0x1D, 0x56, 0x01};       // Cortar papel parcial
-    private static final byte[] CUT_PAPER_FEED = {0x1D, 0x56, 0x42, 0x03};    // Cortar con avance
-    private static final byte[] LINE_FEED = {0x0A};                            // Nueva línea
-    private static final byte[] ALIGN_LEFT = {0x1B, 0x61, 0x00};              // Alinear izquierda
-    private static final byte[] ALIGN_CENTER = {0x1B, 0x61, 0x01};            // Alinear centro
-    private static final byte[] ALIGN_RIGHT = {0x1B, 0x61, 0x02};             // Alinear derecha
-    private static final byte[] BOLD_ON = {0x1B, 0x45, 0x01};                 // Negrita activada
-    private static final byte[] BOLD_OFF = {0x1B, 0x45, 0x00};                // Negrita desactivada
-    private static final byte[] DOUBLE_HEIGHT_ON = {0x1B, 0x21, 0x10};        // Doble altura
-    private static final byte[] DOUBLE_WIDTH_ON = {0x1B, 0x21, 0x20};         // Doble ancho
-    private static final byte[] DOUBLE_SIZE_ON = {0x1B, 0x21, 0x30};          // Doble tamaño (alto y ancho)
-    private static final byte[] NORMAL_SIZE = {0x1B, 0x21, 0x00};             // Tamaño normal
-    private static final byte[] UNDERLINE_ON = {0x1B, 0x2D, 0x01};            // Subrayado activado
-    private static final byte[] UNDERLINE_OFF = {0x1B, 0x2D, 0x00};           // Subrayado desactivada
-    private static final byte[] CHARSET_PC850 = {0x1B, 0x74, 0x02};           // Página de códigos PC850 (español)
+    private static final byte[] INIT = {0x1B, 0x40};
+    private static final byte[] CUT_PAPER = {0x1D, 0x56, 0x00};
+    private static final byte[] CUT_PAPER_PARTIAL = {0x1D, 0x56, 0x01};
+    private static final byte[] CUT_PAPER_FEED = {0x1D, 0x56, 0x42, 0x03};
+    private static final byte[] LINE_FEED = {0x0A};
+    private static final byte[] ALIGN_LEFT = {0x1B, 0x61, 0x00};
+    private static final byte[] ALIGN_CENTER = {0x1B, 0x61, 0x01};
+    private static final byte[] ALIGN_RIGHT = {0x1B, 0x61, 0x02};
+    private static final byte[] BOLD_ON = {0x1B, 0x45, 0x01};
+    private static final byte[] BOLD_OFF = {0x1B, 0x45, 0x00};
+    private static final byte[] DOUBLE_HEIGHT_ON = {0x1B, 0x21, 0x10};
+    private static final byte[] DOUBLE_WIDTH_ON = {0x1B, 0x21, 0x20};
+    private static final byte[] DOUBLE_SIZE_ON = {0x1B, 0x21, 0x30};
+    private static final byte[] NORMAL_SIZE = {0x1B, 0x21, 0x00};
+    private static final byte[] UNDERLINE_ON = {0x1B, 0x2D, 0x01};
+    private static final byte[] UNDERLINE_OFF = {0x1B, 0x2D, 0x00};
+    private static final byte[] CHARSET_PC850 = {0x1B, 0x74, 0x02};
 
     // Configuración
-    private static final int TICKET_WIDTH = 42; // Caracteres por línea (típico para 80mm TM-T88V)
+    private static final int TICKET_WIDTH = 42; // Caracteres por línea (típico para 80 mm TM-T88V)
     private static final String SEPARATOR = "------------------------------------------";
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss");
 
@@ -115,16 +115,12 @@ public class ESCPOSPrinter {
      * En Windows: usa PrintService con el nombre de impresora instalada
      *
      * @param ticket DTO del ticket a imprimir
-     * @throws PrinterException Si hay error al imprimir
-     * @throws IOException      Si hay error al generar los datos
      */
     public void print(TicketDTO ticket) throws PrinterException, IOException {
         System.out.println("Generando comandos ESC/POS...");
 
-        // 1. Generar comandos ESC/POS
         byte[] commands = generateESCPOS(ticket);
 
-        // 2. Imprimir según el sistema operativo
         if (IS_WINDOWS) {
             printToWindowsPrinter(commands, "Ticket #" + ticket.getId());
         } else {
@@ -251,7 +247,6 @@ public class ESCPOSPrinter {
      *
      * @param ticket DTO del ticket
      * @return Array de bytes con los comandos ESC/POS
-     * @throws IOException Si hay error al generar los datos
      */
     public byte[] generateESCPOS(TicketDTO ticket) throws IOException {
         boolean isDelivery = isDeliveryOrder(ticket);
@@ -268,7 +263,6 @@ public class ESCPOSPrinter {
      *
      * @param ticket DTO del ticket
      * @return Array de bytes con los comandos ESC/POS
-     * @throws IOException Si hay error al generar los datos
      */
     private byte[] generateCashRegisterTicket(TicketDTO ticket) throws IOException {
         ByteArrayOutputStream buffer = new ByteArrayOutputStream();
@@ -316,7 +310,6 @@ public class ESCPOSPrinter {
      *
      * @param ticket DTO del ticket
      * @return Array de bytes con los comandos ESC/POS
-     * @throws IOException Si hay error al generar los datos
      */
     private byte[] generateDeliveryTicket(TicketDTO ticket) throws IOException {
         ByteArrayOutputStream buffer = new ByteArrayOutputStream();
@@ -375,31 +368,26 @@ public class ESCPOSPrinter {
     private void writeTicketInfoCashRegister(ByteArrayOutputStream buffer, TicketDTO ticket) throws IOException {
         buffer.write(ALIGN_LEFT);
 
-        // Número de ticket
         buffer.write(BOLD_ON);
         buffer.write(("TICKET #" + ticket.getId()).getBytes(StandardCharsets.ISO_8859_1));
         buffer.write(BOLD_OFF);
         buffer.write(LINE_FEED);
 
-        // Fecha y hora
         if (ticket.getDatetime() != null) {
             buffer.write(("Fecha: " + ticket.getDatetime().format(DATE_FORMAT)).getBytes(StandardCharsets.ISO_8859_1));
             buffer.write(LINE_FEED);
         }
 
-        // Cajero
         if (ticket.getEmployeeName() != null) {
             buffer.write(("Cajero: " + ticket.getEmployeeName()).getBytes(StandardCharsets.ISO_8859_1));
             buffer.write(LINE_FEED);
         }
 
-        // Cliente (opcional en caja)
         if (ticket.getCustomerName() != null && !ticket.getCustomerName().isEmpty()) {
             buffer.write(("Cliente: " + ticket.getCustomerName()).getBytes(StandardCharsets.ISO_8859_1));
             buffer.write(LINE_FEED);
         }
 
-        // Método de pago
         if (ticket.getPaymentMethodName() != null) {
             buffer.write(("Pago: " + ticket.getPaymentMethodName()).getBytes(StandardCharsets.ISO_8859_1));
             buffer.write(LINE_FEED);
@@ -436,7 +424,7 @@ public class ESCPOSPrinter {
 
         // Sección de datos del cliente (importante para delivery)
         buffer.write(BOLD_ON);
-        buffer.write("------ DATOS DEL CLIENTE ------".getBytes(StandardCharsets.ISO_8859_1));
+        buffer.write("-------- DATOS DEL CLIENTE ---------------".getBytes(StandardCharsets.ISO_8859_1));
         buffer.write(BOLD_OFF);
         buffer.write(LINE_FEED);
 
@@ -464,13 +452,11 @@ public class ESCPOSPrinter {
 
         buffer.write(LINE_FEED);
 
-        // Empleado que tomó el pedido
         if (ticket.getEmployeeName() != null) {
             buffer.write(("Atendio: " + ticket.getEmployeeName()).getBytes(StandardCharsets.ISO_8859_1));
             buffer.write(LINE_FEED);
         }
 
-        // Método de pago
         if (ticket.getPaymentMethodName() != null) {
             buffer.write(("Forma de Pago: " + ticket.getPaymentMethodName()).getBytes(StandardCharsets.ISO_8859_1));
             buffer.write(LINE_FEED);
@@ -579,7 +565,7 @@ public class ESCPOSPrinter {
             buffer.write(LINE_FEED);
         }
         if (businessPhone != null && !businessPhone.isEmpty()) {
-            buffer.write(("Whatsapp: " + businessPhone).getBytes(StandardCharsets.ISO_8859_1));
+            buffer.write(("WhatsApp: " + businessPhone).getBytes(StandardCharsets.ISO_8859_1));
             buffer.write(LINE_FEED);
         }
         buffer.write(LINE_FEED);
@@ -592,7 +578,6 @@ public class ESCPOSPrinter {
             return;
         }
 
-        // Encabezado de columnas: CANT | PRODUCTO | PRECIO | TOTAL
         buffer.write(BOLD_ON);
         buffer.write(formatDetailLine("CANT", "PRODUCTO", "PRECIO", "TOTAL").getBytes(StandardCharsets.ISO_8859_1));
         buffer.write(BOLD_OFF);
@@ -601,19 +586,60 @@ public class ESCPOSPrinter {
         buffer.write(LINE_FEED);
 
         for (SaleDetailDTO detail : details) {
-            // Nombre del producto (truncado si es necesario)
-            String productName = detail.getProductName();
-            if (productName != null && productName.length() > 18) {
-                productName = productName.substring(0, 18);
-            }
-
+            String productName = detail.getProductName() != null ? detail.getProductName() : "";
             String qty = formatQuantity(detail.getQuantity());
             String unitPrice = formatPrice(detail.getUnitPrice());
             String total = formatPrice(detail.getSubtotal());
 
-            buffer.write(formatDetailLine(qty, productName, unitPrice, total).getBytes(StandardCharsets.ISO_8859_1));
-            buffer.write(LINE_FEED);
+            if (productName.length() <= 18) {
+                buffer.write(formatDetailLine(qty, productName, unitPrice, total).getBytes(StandardCharsets.ISO_8859_1));
+                buffer.write(LINE_FEED);
+            } else {
+                List<String> lines = splitProductName(productName);
+
+                buffer.write(formatDetailLine(qty, lines.get(0), unitPrice, total).getBytes(StandardCharsets.ISO_8859_1));
+                buffer.write(LINE_FEED);
+
+                for (int i = 1; i < lines.size(); i++) {
+                    buffer.write(formatDetailLine("", lines.get(i), "", "").getBytes(StandardCharsets.ISO_8859_1));
+                    buffer.write(LINE_FEED);
+                }
+            }
         }
+    }
+
+    /**
+     * Divide el nombre del producto en líneas de máximo el ancho especificado.
+     * Intenta cortar en espacios para no partir palabras.
+     */
+    private List<String> splitProductName(String name) {
+        List<String> lines = new java.util.ArrayList<>();
+
+        if (name == null || name.isEmpty()) {
+            lines.add("");
+            return lines;
+        }
+
+        String remaining = name.trim();
+
+        while (remaining.length() > 18) {
+            // Buscar el último espacio dentro del límite
+            int splitPos = remaining.lastIndexOf(' ', 18);
+
+            if (splitPos <= 0) {
+                // No hay espacio, cortar en el límite
+                splitPos = 18;
+            }
+
+            lines.add(remaining.substring(0, splitPos).trim());
+            remaining = remaining.substring(splitPos).trim();
+        }
+
+        if (!remaining.isEmpty()) {
+            lines.add(remaining);
+        }
+
+        return lines;
     }
 
     private void writeTotals(ByteArrayOutputStream buffer, TicketDTO ticket) throws IOException {
@@ -665,10 +691,10 @@ public class ESCPOSPrinter {
      * Ancho total: 42 caracteres (típico para impresora de 80mm)
      */
     private String formatDetailLine(String cant, String producto, String precio, String total) {
-        int cantWidth = 5;      // Cantidad (ej: "10")
-        int productoWidth = 18; // Nombre del producto
-        int precioWidth = 8;    // Precio unitario (ej: "999.99")
-        int totalWidth = 8;     // Total (ej: "9999.99")
+        int cantWidth = 5;
+        int productoWidth = 18;
+        int precioWidth = 8;
+        int totalWidth = 8;
 
         cant = cant != null ? cant : "";
         producto = producto != null ? producto : "";
@@ -708,7 +734,6 @@ public class ESCPOSPrinter {
      * Imprime un ticket de prueba para verificar la conexión con la impresora.
      *
      * @throws PrinterException Si hay error al imprimir
-     * @throws IOException      Si hay error al generar los datos
      */
     public void printTestPage() throws PrinterException, IOException {
         System.out.println("Generando página de prueba...");
@@ -723,7 +748,7 @@ public class ESCPOSPrinter {
         buffer.write(ALIGN_CENTER);
 
         buffer.write(DOUBLE_SIZE_ON);
-        buffer.write("PRUEBA DE IMPRESION".getBytes(StandardCharsets.ISO_8859_1));
+        buffer.write("PRINT TEST".getBytes(StandardCharsets.ISO_8859_1));
         buffer.write(NORMAL_SIZE);
         buffer.write(LINE_FEED);
         buffer.write(LINE_FEED);
@@ -733,7 +758,7 @@ public class ESCPOSPrinter {
 
         buffer.write("POS Printer Agent".getBytes(StandardCharsets.ISO_8859_1));
         buffer.write(LINE_FEED);
-        buffer.write("Conexion exitosa!".getBytes(StandardCharsets.ISO_8859_1));
+        buffer.write("Connection successful!".getBytes(StandardCharsets.ISO_8859_1));
         buffer.write(LINE_FEED);
         buffer.write(LINE_FEED);
 
