@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Controlador para báscula Torrey PCR Series
@@ -43,6 +44,10 @@ public class TorreyScaleController {
     private Thread pollingThread;
     private volatile boolean pollingActive = false;
 
+    // Contador de errores consecutivos para detectar desconexión física
+    private final AtomicInteger consecutiveErrors = new AtomicInteger(0);
+    private static final int MAX_CONSECUTIVE_ERRORS = 5;
+
     public TorreyScaleController(String portName) {
         this.portName = portName;
         this.isConnected = false;
@@ -55,7 +60,10 @@ public class TorreyScaleController {
         try {
             logger.info("Intentando conectar con báscula Torrey en puerto: {}", portName);
 
-            // Buscar el puerto
+            // Limpiar cualquier conexión anterior antes de reconectar
+            cleanupConnection();
+
+            // Buscar el puerto - siempre crear una nueva instancia
             serialPort = SerialPort.getCommPort(portName);
 
             // Configurar parámetros del puerto
@@ -69,6 +77,8 @@ public class TorreyScaleController {
             // Abrir puerto
             if (serialPort.openPort()) {
                 isConnected = true;
+                consecutiveErrors.set(0); // Resetear contador de errores
+                lastReadTime = 0; // Resetear tiempo de última lectura
                 logger.info("Conectado exitosamente a la báscula en {}", portName);
 
                 // Esperar un momento para estabilizar la conexión
@@ -97,12 +107,46 @@ public class TorreyScaleController {
         // Detener polling primero
         stopPolling();
 
-        if (serialPort != null && serialPort.isOpen()) {
-            serialPort.closePort();
-            isConnected = false;
-            lastReading = WeightReading.zero();
-            logger.info("Desconectado de la báscula");
+        // Cerrar puerto si está abierto
+        if (serialPort != null) {
+            try {
+                if (serialPort.isOpen()) {
+                    serialPort.closePort();
+                }
+            } catch (Exception e) {
+                logger.warn("Error al cerrar puerto: {}", e.getMessage());
+            }
+            serialPort = null; // Liberar referencia para permitir reconexión limpia
         }
+
+        isConnected = false;
+        lastReading = WeightReading.zero();
+        lastReadTime = 0;
+        consecutiveErrors.set(0);
+        logger.info("Desconectado de la báscula");
+    }
+
+    /**
+     * Limpia la conexión anterior sin logging (uso interno para reconexión)
+     */
+    private void cleanupConnection() {
+        stopPolling();
+
+        if (serialPort != null) {
+            try {
+                if (serialPort.isOpen()) {
+                    serialPort.closePort();
+                }
+            } catch (Exception e) {
+                logger.debug("Error al limpiar conexión anterior: {}", e.getMessage());
+            }
+            serialPort = null;
+        }
+
+        isConnected = false;
+        lastReading = WeightReading.zero();
+        lastReadTime = 0;
+        consecutiveErrors.set(0);
     }
 
     /**
@@ -118,14 +162,39 @@ public class TorreyScaleController {
             logger.info("Iniciando polling de báscula cada {}ms", POLLING_INTERVAL);
             while (pollingActive && isConnected) {
                 try {
-                    lastReading = readWeightInternal();
-                    lastReadTime = System.currentTimeMillis();
+                    WeightReading reading = readWeightInternal();
+
+                    if (reading.success()) {
+                        // Lectura exitosa - resetear contador de errores
+                        consecutiveErrors.set(0);
+                        lastReading = reading;
+                        lastReadTime = System.currentTimeMillis();
+                    } else {
+                        // Error en lectura - incrementar contador
+                        int errors = consecutiveErrors.incrementAndGet();
+                        logger.warn("Error en lectura #{}: {}", errors, reading.errorMessage());
+
+                        // Si hay muchos errores consecutivos, asumir desconexión física
+                        if (errors >= MAX_CONSECUTIVE_ERRORS) {
+                            logger.error("Detectada desconexión física de la báscula después de {} errores consecutivos", errors);
+                            isConnected = false;
+                            break; // Salir del loop de polling
+                        }
+                    }
+
                     TimeUnit.MILLISECONDS.sleep(POLLING_INTERVAL);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     break;
                 } catch (Exception e) {
-                    logger.warn("Error en polling: {}", e.getMessage());
+                    int errors = consecutiveErrors.incrementAndGet();
+                    logger.warn("Excepción en polling #{}: {}", errors, e.getMessage());
+
+                    if (errors >= MAX_CONSECUTIVE_ERRORS) {
+                        logger.error("Detectada desconexión física de la báscula después de {} excepciones consecutivas", errors);
+                        isConnected = false;
+                        break;
+                    }
                 }
             }
             logger.info("Polling de báscula detenido");
@@ -302,24 +371,24 @@ public class TorreyScaleController {
     }
 
     /**
-         * Clase interna para representar una lectura de peso
-         */
-        public record WeightReading(double weight, String unit, boolean stable, boolean success, String errorMessage) {
+     * Clase interna para representar una lectura de peso
+     */
+    public record WeightReading(double weight, String unit, boolean stable, boolean success, String errorMessage) {
 
         public static WeightReading zero() {
-                return new WeightReading(0.0, "kg", true, true, null);
-            }
-
-            public static WeightReading error(String message) {
-                return new WeightReading(0.0, "kg", false, false, message);
-            }
-
-            @Override
-            public String toString() {
-                if (!success) {
-                    return String.format("Error: %s", errorMessage);
-                }
-                return String.format("%.3f %s (%s)", weight, unit, stable ? "estable" : "inestable");
-            }
+            return new WeightReading(0.0, "kg", true, true, null);
         }
+
+        public static WeightReading error(String message) {
+            return new WeightReading(0.0, "kg", false, false, message);
+        }
+
+        @Override
+        public String toString() {
+            if (!success) {
+                return String.format("Error: %s", errorMessage);
+            }
+            return String.format("%.3f %s (%s)", weight, unit, stable ? "estable" : "inestable");
+        }
+    }
 }
