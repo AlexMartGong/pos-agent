@@ -12,8 +12,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -74,12 +78,11 @@ public class POSPrinterAgent extends WebSocketClient {
 
         // Enviar confirmación de conexión
         try {
-            String connectionMessage = String.format(
-                    "{\"type\":\"CONNECTED\",\"stationId\":\"%s\",\"timestamp\":\"%s\"}",
-                    stationId,
-                    LocalDateTime.now().format(LOG_FORMAT)
-            );
-            send(connectionMessage);
+            Map<String, Object> msg = new LinkedHashMap<>();
+            msg.put("type", "CONNECTED");
+            msg.put("stationId", stationId);
+            msg.put("timestamp", LocalDateTime.now().format(LOG_FORMAT));
+            send(objectMapper.writeValueAsString(msg));
             log("INFO", "Mensaje de conexión enviado al servidor");
         } catch (Exception e) {
             log("ERROR", "No se pudo enviar mensaje de conexión: " + e.getMessage());
@@ -151,21 +154,17 @@ public class POSPrinterAgent extends WebSocketClient {
      */
     private void sendPrintConfirmation(Long ticketId, boolean success, String error) {
         try {
-            StringBuilder json = new StringBuilder();
-            json.append("{");
-            json.append("\"type\":\"PRINT_RESULT\",");
-            json.append("\"ticketId\":").append(ticketId).append(",");
-            json.append("\"success\":").append(success).append(",");
-            json.append("\"stationId\":\"").append(stationId).append("\",");
-            json.append("\"timestamp\":\"").append(LocalDateTime.now().format(LOG_FORMAT)).append("\"");
+            Map<String, Object> msg = new LinkedHashMap<>();
+            msg.put("type", "PRINT_RESULT");
+            msg.put("ticketId", ticketId);
+            msg.put("success", success);
+            msg.put("stationId", stationId);
+            msg.put("timestamp", LocalDateTime.now().format(LOG_FORMAT));
             if (error != null) {
-                // Escapar caracteres especiales en el mensaje de error
-                String escapedError = error.replace("\\", "\\\\").replace("\"", "\\\"");
-                json.append(",\"error\":\"").append(escapedError).append("\"");
+                msg.put("error", error);
             }
-            json.append("}");
 
-            send(json.toString());
+            send(objectMapper.writeValueAsString(msg));
             log("INFO", "Confirmación enviada - Ticket #" + ticketId + ": " + (success ? "OK" : "FALLO"));
         } catch (Exception e) {
             log("ERROR", "No se pudo enviar confirmación: " + e.getMessage());
@@ -280,8 +279,8 @@ public class POSPrinterAgent extends WebSocketClient {
         boolean scaleEnabled = Boolean.parseBoolean(getConfig("SCALE_ENABLED", "scale.enabled", fileConfig, String.valueOf(DEFAULT_SCALE_ENABLED)));
         boolean scaleAutoConnect = Boolean.parseBoolean(getConfig("SCALE_AUTO_CONNECT", "scale.autoConnect", fileConfig, String.valueOf(DEFAULT_SCALE_AUTO_CONNECT)));
 
-        // Construir URL con stationId
-        String fullUrl = serverUrl + "?stationId=" + stationId;
+        // Construir URL con stationId (URL-encoded para prevenir inyección)
+        String fullUrl = serverUrl + "?stationId=" + URLEncoder.encode(stationId, StandardCharsets.UTF_8);
 
         log("INFO", "Configuración:");
         log("INFO", "  Station ID: " + stationId);

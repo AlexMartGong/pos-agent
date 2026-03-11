@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
@@ -46,7 +47,7 @@ public class ScaleRestServer {
         logger.info("Iniciando servidor REST en puerto {}...", PORT);
 
         // Crear servidor HTTP
-        server = HttpServer.create(new InetSocketAddress(PORT), 0);
+        server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), PORT), 0);
 
         // Configurar endpoints
         server.createContext("/api/scale/weight", new WeightHandler());
@@ -143,7 +144,7 @@ public class ScaleRestServer {
             } catch (Exception e) {
                 logger.error("Error al leer peso: {}", e.getMessage(), e);
                 response.put("success", false);
-                response.put("error", "Error al leer peso: " + e.getMessage());
+                response.put("error", "Error interno al leer peso");
                 response.put("connected", false);
                 sendResponse(exchange, 500, response);
             }
@@ -289,7 +290,7 @@ public class ScaleRestServer {
             } catch (Exception e) {
                 logger.error("Error al listar puertos: {}", e.getMessage(), e);
                 response.put("success", false);
-                response.put("error", e.getMessage());
+                response.put("error", "Error interno al listar puertos");
                 sendResponse(exchange, 500, response);
             }
         }

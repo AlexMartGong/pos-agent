@@ -165,10 +165,10 @@ sudo usermod -a -G dialout $USER
 
 - Java 17+
 - Maven 3.6+
-- Java-WebSocket 1.5.4 - WebSocket client
-- Jackson 2.15.3 - JSON serialization/deserialization with JSR310 module for LocalDateTime
-- jSerialComm 2.10.4 - Serial port communication for scale
-- SLF4J 2.0.9 - Logging
+- Java-WebSocket 1.6.0 - WebSocket client
+- Jackson 2.18.6 - JSON serialization/deserialization with JSR310 module for LocalDateTime
+- jSerialComm 2.11.4 - Serial port communication for scale
+- SLF4J 2.0.17 - Logging
 
 ## Environment Variables
 
