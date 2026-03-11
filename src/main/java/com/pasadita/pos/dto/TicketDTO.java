@@ -6,10 +6,6 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
-/**
- * DTO para el ticket de venta completo.
- * Estructura copiada del backend pasadita-api (TicketResponseDto).
- */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class TicketDTO {
     private Long id;
@@ -31,11 +27,9 @@ public class TicketDTO {
     private String notes;
     private List<SaleDetailDTO> saleDetails;
 
-    // Constructor vacío requerido para Jackson
     public TicketDTO() {
     }
 
-    // Getters y Setters
     public Long getId() {
         return id;
     }

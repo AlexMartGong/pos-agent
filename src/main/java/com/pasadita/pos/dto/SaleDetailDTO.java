@@ -5,10 +5,6 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
-/**
- * DTO para los detalles de una venta.
- * Estructura copiada del backend pasadita-api.
- */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class SaleDetailDTO {
     private Long detailId;
@@ -23,11 +19,9 @@ public class SaleDetailDTO {
     private BigDecimal subtotal;
     private BigDecimal total;
 
-    // Constructor vacío requerido para Jackson
     public SaleDetailDTO() {
     }
 
-    // Getters y Setters
     public Long getDetailId() {
         return detailId;
     }
