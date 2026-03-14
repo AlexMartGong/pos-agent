@@ -11,7 +11,6 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -483,22 +482,6 @@ public class ESCPOSPrinter {
         buffer.write(ALIGN_LEFT);
     }
 
-    private String formatLine(String col1, String col2, String col3) {
-        int col1Width = 24;
-        int col2Width = 6;
-        int col3Width = 10;
-
-        col1 = col1 != null ? col1 : "";
-        col2 = col2 != null ? col2 : "";
-        col3 = col3 != null ? col3 : "";
-
-        if (col1.length() > col1Width) col1 = col1.substring(0, col1Width);
-        if (col2.length() > col2Width) col2 = col2.substring(0, col2Width);
-        if (col3.length() > col3Width) col3 = col3.substring(0, col3Width);
-
-        return String.format("%-" + col1Width + "s %" + col2Width + "s %" + col3Width + "s", col1, col2, col3);
-    }
-
     private String formatDetailLine(String cant, String producto, String precio, String total) {
         int cantWidth = 5;
         int productoWidth = 18;
@@ -585,14 +568,6 @@ public class ESCPOSPrinter {
             File printerDevice = new File(printerPath);
             return printerDevice.exists() && printerDevice.canWrite();
         }
-    }
-
-    public String getPrinterPath() {
-        return printerPath;
-    }
-
-    public String getPrinterName() {
-        return printerName;
     }
 
     public static boolean isWindows() {
