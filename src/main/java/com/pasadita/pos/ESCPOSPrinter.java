@@ -271,6 +271,7 @@ public class ESCPOSPrinter {
     }
 
     private void writeTicketInfoDelivery(ByteArrayOutputStream buffer, TicketDTO ticket) throws IOException {
+        System.out.println("Ticket: " + ticket.toString());
         buffer.write(ALIGN_LEFT);
 
         buffer.write(BOLD_ON);
@@ -297,6 +298,11 @@ public class ESCPOSPrinter {
 
         if (ticket.getCustomerName() != null && !ticket.getCustomerName().isEmpty()) {
             buffer.write(("Nombre: " + ticket.getCustomerName()).getBytes(StandardCharsets.ISO_8859_1));
+            buffer.write(LINE_FEED);
+        }
+
+        if (ticket.getCustomerDiscount() != null && ticket.getCustomerDiscount().compareTo(BigDecimal.ZERO) > 0) {
+            buffer.write(("Descuento Cliente: " + formatPrice(ticket.getCustomerDiscount())).getBytes(StandardCharsets.ISO_8859_1));
             buffer.write(LINE_FEED);
         }
 

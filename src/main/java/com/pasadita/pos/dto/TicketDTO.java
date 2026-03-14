@@ -16,6 +16,7 @@ public class TicketDTO {
     private Long customerId;
     private String customerName;
     private String customerPhone;
+    private BigDecimal customerDiscount;
     private String deliveryAddress;
     private Long paymentMethodId;
     private String paymentMethodName;
@@ -28,6 +29,14 @@ public class TicketDTO {
     private List<SaleDetailDTO> saleDetails;
 
     public TicketDTO() {
+    }
+
+    public BigDecimal getCustomerDiscount() {
+        return customerDiscount;
+    }
+
+    public void setCustomerDiscount(BigDecimal customerDiscount) {
+        this.customerDiscount = customerDiscount;
     }
 
     public Long getId() {
@@ -185,6 +194,7 @@ public class TicketDTO {
                 ", customerId=" + customerId +
                 ", customerName='" + customerName + '\'' +
                 ", customerPhone='" + customerPhone + '\'' +
+                ", customerDiscount=" + customerDiscount +
                 ", deliveryAddress='" + deliveryAddress + '\'' +
                 ", paymentMethodId=" + paymentMethodId +
                 ", paymentMethodName='" + paymentMethodName + '\'' +
