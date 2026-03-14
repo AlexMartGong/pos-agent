@@ -183,7 +183,7 @@ public class ESCPOSPrinter {
         buffer.write(SEPARATOR.getBytes(StandardCharsets.ISO_8859_1));
         buffer.write(LINE_FEED);
 
-        writeDetails(buffer, ticket.getSaleDetails(), ticket.getDiscountAmount());
+        writeDetails(buffer, ticket.getSaleDetails());
 
         buffer.write(SEPARATOR.getBytes(StandardCharsets.ISO_8859_1));
         buffer.write(LINE_FEED);
@@ -223,7 +223,7 @@ public class ESCPOSPrinter {
         buffer.write(SEPARATOR.getBytes(StandardCharsets.ISO_8859_1));
         buffer.write(LINE_FEED);
 
-        writeDetails(buffer, ticket.getSaleDetails(), ticket.getDiscountAmount());
+        writeDetails(buffer, ticket.getSaleDetails());
 
         buffer.write(SEPARATOR.getBytes(StandardCharsets.ISO_8859_1));
         buffer.write(LINE_FEED);
@@ -398,10 +398,6 @@ public class ESCPOSPrinter {
     }
 
     private void writeDetails(ByteArrayOutputStream buffer, List<SaleDetailDTO> details) throws IOException {
-        writeDetails(buffer, details, BigDecimal.ZERO);
-    }
-
-    private void writeDetails(ByteArrayOutputStream buffer, List<SaleDetailDTO> details, BigDecimal discountAmount) throws IOException {
         if (details == null || details.isEmpty()) {
             buffer.write("(Sin productos)".getBytes(StandardCharsets.ISO_8859_1));
             buffer.write(LINE_FEED);
@@ -415,38 +411,19 @@ public class ESCPOSPrinter {
         buffer.write(SEPARATOR.getBytes(StandardCharsets.ISO_8859_1));
         buffer.write(LINE_FEED);
 
-        // Calcular el factor de descuento si existe
-        BigDecimal discountFactor = BigDecimal.ONE;
-        if (discountAmount != null && discountAmount.compareTo(BigDecimal.ZERO) > 0) {
-            // Calcular el subtotal de todos los productos
-            BigDecimal subtotal = details.stream()
-                    .map(SaleDetailDTO::getSubtotal)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-            if (subtotal.compareTo(BigDecimal.ZERO) > 0) {
-                // Factor de descuento = (subtotal - descuento) / subtotal
-                discountFactor = subtotal.subtract(discountAmount).divide(subtotal, 4, RoundingMode.HALF_UP);
-            }
-        }
-
         for (SaleDetailDTO detail : details) {
             String productName = detail.getProductName() != null ? detail.getProductName() : "";
             String qty = formatQuantity(detail.getQuantity());
-
-            // Aplicar el descuento al precio unitario y al total si existe
-            BigDecimal unitPrice = detail.getUnitPrice().multiply(discountFactor);
-            BigDecimal total = detail.getSubtotal().multiply(discountFactor);
-
-            String unitPriceStr = formatPrice(unitPrice);
-            String totalStr = formatPrice(total);
+            String unitPrice = formatPrice(detail.getUnitPrice());
+            String total = formatPrice(detail.getSubtotal());
 
             if (productName.length() <= 18) {
-                buffer.write(formatDetailLine(qty, productName, unitPriceStr, totalStr).getBytes(StandardCharsets.ISO_8859_1));
+                buffer.write(formatDetailLine(qty, productName, unitPrice, total).getBytes(StandardCharsets.ISO_8859_1));
                 buffer.write(LINE_FEED);
             } else {
                 List<String> lines = splitProductName(productName);
 
-                buffer.write(formatDetailLine(qty, lines.get(0), unitPriceStr, totalStr).getBytes(StandardCharsets.ISO_8859_1));
+                buffer.write(formatDetailLine(qty, lines.get(0), unitPrice, total).getBytes(StandardCharsets.ISO_8859_1));
                 buffer.write(LINE_FEED);
 
                 for (int i = 1; i < lines.size(); i++) {
