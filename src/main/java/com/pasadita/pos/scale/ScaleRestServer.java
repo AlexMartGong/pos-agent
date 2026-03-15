@@ -1,5 +1,6 @@
 package com.pasadita.pos.scale;
 
+import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
@@ -38,6 +39,8 @@ public class ScaleRestServer {
         this.scaleEnabled = scaleEnabled;
         this.autoConnect = autoConnect;
         this.objectMapper = new ObjectMapper();
+        // Serializar BigDecimal como número plano (ej: 2.110) sin notación científica
+        this.objectMapper.configure(JsonGenerator.Feature.WRITE_BIGDECIMAL_AS_PLAIN, true);
     }
 
     /**

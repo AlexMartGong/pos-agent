@@ -4,69 +4,65 @@ import com.fazecast.jSerialComm.SerialPort;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
-/**
- * Controlador para báscula Torrey PCR Series
- * Sin dependencias de Spring Boot - Solo Java puro
- */
 public class TorreyScaleController {
 
     private static final Logger logger = LoggerFactory.getLogger(TorreyScaleController.class);
 
-    // Configuración del puerto serial
     private static final int BAUD_RATE = 9600;
     private static final int DATA_BITS = 8;
     private static final int STOP_BITS = SerialPort.ONE_STOP_BIT;
     private static final int PARITY = SerialPort.NO_PARITY;
 
-    // Timeouts
     private static final int READ_TIMEOUT = 2000; // 2 segundos
     private static final int WRITE_TIMEOUT = 1000; // 1 segundo
 
-    // Comandos Torrey PCR
     private static final byte[] COMMAND_READ_WEIGHT = {0x57}; // 'W' - Solicitar peso
 
-    // Intervalo de polling interno (ms)
     private static final int POLLING_INTERVAL = 300;
+
+    private static final int STABILITY_WINDOW = 5;
+
+    private static final Pattern WEIGHT_PATTERN = Pattern.compile("-?\\d+\\.?\\d*");
 
     private SerialPort serialPort;
     private final String portName;
     private volatile boolean isConnected;
 
-    // Caché del último peso leído (thread-safe)
     private volatile WeightReading lastReading = WeightReading.zero();
     private volatile long lastReadTime = 0;
 
-    // Hilo de polling dedicado
     private Thread pollingThread;
     private volatile boolean pollingActive = false;
 
-    // Contador de errores consecutivos para detectar desconexión física
     private final AtomicInteger consecutiveErrors = new AtomicInteger(0);
     private static final int MAX_CONSECUTIVE_ERRORS = 5;
+
+    private final BigDecimal[] stabilityBuffer = new BigDecimal[STABILITY_WINDOW];
+    private int stabilityIndex = 0;
+    private int stabilityCount = 0; // cuántas muestras se han llenado (max STABILITY_WINDOW)
 
     public TorreyScaleController(String portName) {
         this.portName = portName;
         this.isConnected = false;
     }
 
-    /**
-     * Conecta con el puerto serial de la báscula
-     */
     public boolean connect() {
         try {
             logger.info("Intentando conectar con báscula Torrey en puerto: {}", portName);
 
-            // Limpiar cualquier conexión anterior antes de reconectar
             cleanupConnection();
 
-            // Buscar el puerto - siempre crear una nueva instancia
             serialPort = SerialPort.getCommPort(portName);
 
-            // Configurar parámetros del puerto
             serialPort.setComPortParameters(BAUD_RATE, DATA_BITS, STOP_BITS, PARITY);
             serialPort.setComPortTimeouts(
                     SerialPort.TIMEOUT_READ_BLOCKING | SerialPort.TIMEOUT_WRITE_BLOCKING,
@@ -74,17 +70,15 @@ public class TorreyScaleController {
                     WRITE_TIMEOUT
             );
 
-            // Abrir puerto
             if (serialPort.openPort()) {
                 isConnected = true;
-                consecutiveErrors.set(0); // Resetear contador de errores
-                lastReadTime = 0; // Resetear tiempo de última lectura
+                consecutiveErrors.set(0);
+                lastReadTime = 0;
+                resetStabilityBuffer();
                 logger.info("Conectado exitosamente a la báscula en {}", portName);
 
-                // Esperar un momento para estabilizar la conexión
                 TimeUnit.MILLISECONDS.sleep(500);
 
-                // Iniciar polling dedicado
                 startPolling();
 
                 return true;
@@ -100,14 +94,9 @@ public class TorreyScaleController {
         }
     }
 
-    /**
-     * Desconecta del puerto serial
-     */
     public void disconnect() {
-        // Detener polling primero
         stopPolling();
 
-        // Cerrar puerto si está abierto
         if (serialPort != null) {
             try {
                 if (serialPort.isOpen()) {
@@ -116,19 +105,17 @@ public class TorreyScaleController {
             } catch (Exception e) {
                 logger.warn("Error al cerrar puerto: {}", e.getMessage());
             }
-            serialPort = null; // Liberar referencia para permitir reconexión limpia
+            serialPort = null;
         }
 
         isConnected = false;
         lastReading = WeightReading.zero();
         lastReadTime = 0;
         consecutiveErrors.set(0);
+        resetStabilityBuffer();
         logger.info("Desconectado de la báscula");
     }
 
-    /**
-     * Limpia la conexión anterior sin logging (uso interno para reconexión)
-     */
     private void cleanupConnection() {
         stopPolling();
 
@@ -147,6 +134,41 @@ public class TorreyScaleController {
         lastReading = WeightReading.zero();
         lastReadTime = 0;
         consecutiveErrors.set(0);
+        resetStabilityBuffer();
+    }
+
+    /**
+     * Resetea el buffer circular de estabilidad
+     */
+    private void resetStabilityBuffer() {
+        Arrays.fill(stabilityBuffer, null);
+        stabilityIndex = 0;
+        stabilityCount = 0;
+    }
+
+    /**
+     * Registra una nueva lectura en el buffer de estabilidad y determina si es estable.
+     * Estable = las últimas STABILITY_WINDOW lecturas son exactamente iguales (compareTo == 0).
+     */
+    private boolean updateStabilityAndCheck(BigDecimal weight) {
+        stabilityBuffer[stabilityIndex] = weight;
+        stabilityIndex = (stabilityIndex + 1) % STABILITY_WINDOW;
+        if (stabilityCount < STABILITY_WINDOW) {
+            stabilityCount++;
+        }
+
+        // Se necesitan al menos STABILITY_WINDOW muestras
+        if (stabilityCount < STABILITY_WINDOW) {
+            return false;
+        }
+
+        // Comparar todas las muestras del buffer contra la más reciente
+        for (int i = 0; i < STABILITY_WINDOW; i++) {
+            if (stabilityBuffer[i] == null || stabilityBuffer[i].compareTo(weight) != 0) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
@@ -289,42 +311,71 @@ public class TorreyScaleController {
         }
     }
 
-    /**
-     * Parsea la respuesta de la báscula Torrey PCR
-     */
     private WeightReading parseWeightResponse(String response) {
         try {
-            // Remover espacios y separadores
-            String cleaned = response.replaceAll("[^0-9.kg-]", "");
+            // Paso 1: Limpiar ruido serial - quedarse solo con caracteres ASCII imprimibles
+            StringBuilder cleaned = new StringBuilder();
+            for (char c : response.toCharArray()) {
+                if (c >= 0x20 && c <= 0x7E) {
+                    cleaned.append(c);
+                }
+            }
+            String cleanResponse = cleaned.toString().trim();
 
-            // Buscar el peso numérico
-            String weightStr = cleaned.replaceAll("[kg-]", "").trim();
-
-            if (weightStr.isEmpty()) {
+            if (cleanResponse.isEmpty()) {
                 return WeightReading.zero();
             }
 
-            double weight = Double.parseDouble(weightStr);
+            // Paso 2: Determinar signo negativo (antes de extraer el número)
+            boolean negative = cleanResponse.contains("-");
 
-            // Determinar si es estable
-            boolean stable = response.contains("ST") || !response.contains("US");
+            // Paso 3: Determinar unidad
+            String unit = cleanResponse.toLowerCase().contains("kg") ? "kg" : "g";
 
-            // Determinar unidad
-            String unit = response.toLowerCase().contains("kg") ? "kg" : "g";
+            // Paso 4: Determinar estabilidad según flag de la trama (ST vs US)
+            // Este flag se usa como referencia pero la estabilidad final la decide
+            // el filtro de software (buffer de 5 lecturas)
+            boolean frameStable = cleanResponse.contains("ST") || !cleanResponse.contains("US");
 
-            // Verificar si es peso negativo
-            boolean negative = response.contains("-");
-            if (negative) {
-                weight = -weight;
+            // Paso 5: Extraer valor numérico con regex (tolerante a ruido)
+            // Buscar el patrón numérico más largo en la respuesta limpia
+            // Primero quitar las letras de unidad para no confundir el regex
+            String withoutUnit = cleanResponse.replaceAll("(?i)(kg|g\\b)", "")
+                    .replaceAll("[^0-9.\\-]", " ")
+                    .trim();
+
+            Matcher matcher = WEIGHT_PATTERN.matcher(withoutUnit);
+            if (!matcher.find()) {
+                return WeightReading.zero();
             }
 
-            logger.info("Peso leído: {} {} ({})", weight, unit, stable ? "estable" : "inestable");
+            String weightStr = matcher.group();
+
+            // Paso 6: Convertir a BigDecimal con escala de 3 decimales
+            BigDecimal weight = new BigDecimal(weightStr).setScale(3, RoundingMode.HALF_UP);
+
+            // Aplicar signo negativo si la trama lo indica y el número es positivo
+            if (negative && weight.compareTo(BigDecimal.ZERO) > 0) {
+                weight = weight.negate();
+            }
+
+            // Paso 7: Actualizar buffer de estabilidad y determinar estabilidad por software
+            boolean softwareStable = updateStabilityAndCheck(weight);
+
+            // La lectura es estable solo si AMBAS condiciones se cumplen:
+            // la trama dice estable Y el filtro de software confirma
+            boolean stable = frameStable && softwareStable;
+
+            logger.info("Peso leído: {} {} ({})", weight.toPlainString(), unit, stable ? "estable" : "inestable");
 
             return new WeightReading(weight, unit, stable, true, null);
 
         } catch (NumberFormatException e) {
             logger.error("Error al parsear peso de respuesta: '{}'", response);
             return WeightReading.error("Formato inválido");
+        } catch (ArithmeticException e) {
+            logger.error("Error aritmético al procesar peso: '{}'", response);
+            return WeightReading.error("Error de precisión");
         }
     }
 
@@ -371,16 +422,17 @@ public class TorreyScaleController {
     }
 
     /**
-     * Clase interna para representar una lectura de peso
+     * Clase interna para representar una lectura de peso.
+     * Usa BigDecimal para precisión financiera (3 decimales para peso, compatible con 2 decimales para dinero).
      */
-    public record WeightReading(double weight, String unit, boolean stable, boolean success, String errorMessage) {
+    public record WeightReading(BigDecimal weight, String unit, boolean stable, boolean success, String errorMessage) {
 
         public static WeightReading zero() {
-            return new WeightReading(0.0, "kg", true, true, null);
+            return new WeightReading(BigDecimal.ZERO.setScale(3, RoundingMode.HALF_UP), "kg", true, true, null);
         }
 
         public static WeightReading error(String message) {
-            return new WeightReading(0.0, "kg", false, false, message);
+            return new WeightReading(BigDecimal.ZERO.setScale(3, RoundingMode.HALF_UP), "kg", false, false, message);
         }
 
         @Override
@@ -388,7 +440,7 @@ public class TorreyScaleController {
             if (!success) {
                 return String.format("Error: %s", errorMessage);
             }
-            return String.format("%.3f %s (%s)", weight, unit, stable ? "estable" : "inestable");
+            return String.format("%s %s (%s)", weight.toPlainString(), unit, stable ? "estable" : "inestable");
         }
     }
 }
