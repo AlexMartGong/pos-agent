@@ -23,21 +23,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
-/**
- * Agente de impresión POS que conecta al backend via WebSocket
- * y envía los tickets recibidos a la impresora térmica ESC/POS.
- * <p>
- * Configuración via variables de entorno:
- * - SERVER_URL: URL del servidor WebSocket (default: ws://localhost:8080/ws/printer)
- * - STATION_ID: ID de esta estación POS (default: POS1)
- * - PRINTER_PATH: Ruta del dispositivo de impresora (default: /dev/usb/lp0)
- * - BUSINESS_NAME: Nombre del negocio (default: LA PASADITA)
- * - BUSINESS_ADDRESS: Dirección del negocio
- * - BUSINESS_PHONE: Teléfono del negocio
- */
 public class POSPrinterAgent extends WebSocketClient {
-
-    // Configuración por defecto
     private static final String DEFAULT_SERVER_URL = "ws://localhost:8080/ws/printer";
     private static final String DEFAULT_STATION_ID = "POS1";
     private static final String DEFAULT_PRINTER_PATH = "/dev/usb/lp0";
@@ -46,7 +32,6 @@ public class POSPrinterAgent extends WebSocketClient {
     private static final boolean DEFAULT_SCALE_AUTO_CONNECT = true;
     private static final int RECONNECT_DELAY_SECONDS = 5;
 
-    // Formato para logging
     private static final DateTimeFormatter LOG_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     private final String stationId;
@@ -55,13 +40,6 @@ public class POSPrinterAgent extends WebSocketClient {
     private final ScheduledExecutorService scheduler;
     private volatile boolean running = true;
 
-    /**
-     * Constructor principal que extiende WebSocketClient.
-     *
-     * @param serverUri URI completa del servidor WebSocket (incluyendo stationId)
-     * @param stationId ID de esta estación POS
-     * @param printer   Instancia del printer ESC/POS
-     */
     public POSPrinterAgent(URI serverUri, String stationId, ESCPOSPrinter printer) {
         super(serverUri);
         this.stationId = stationId;
@@ -76,7 +54,6 @@ public class POSPrinterAgent extends WebSocketClient {
         log("INFO", "Conexión establecida con el servidor");
         log("INFO", "Esperando tickets para imprimir...");
 
-        // Enviar confirmación de conexión
         try {
             Map<String, Object> msg = new LinkedHashMap<>();
             msg.put("type", "CONNECTED");
@@ -94,11 +71,9 @@ public class POSPrinterAgent extends WebSocketClient {
         log("INFO", "Mensaje recibido del servidor (" + message.length() + " bytes)");
 
         try {
-            // Deserializer JSON TicketDTO usando Jackson
             TicketDTO ticket = objectMapper.readValue(message, TicketDTO.class);
             log("INFO", "Ticket #" + ticket.getId() + " parseado - Cliente: " + ticket.getCustomerName());
 
-            // Intentar imprimir el ticket
             printTicket(ticket);
 
         } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
@@ -110,11 +85,6 @@ public class POSPrinterAgent extends WebSocketClient {
         }
     }
 
-    /**
-     * Imprime el ticket y envía confirmación al servidor.
-     *
-     * @param ticket TicketDTO an imprimir
-     */
     private void printTicket(TicketDTO ticket) {
         boolean success = false;
         String errorMessage = null;
@@ -141,17 +111,9 @@ public class POSPrinterAgent extends WebSocketClient {
             e.fillInStackTrace();
         }
 
-        // Enviar confirmación de vuelta al servidor
         sendPrintConfirmation(ticket.getId(), success, errorMessage);
     }
 
-    /**
-     * Envía confirmación de impresión al servidor.
-     *
-     * @param ticketId ID del ticket
-     * @param success  Si la impresión fue exitosa
-     * @param error    Mensaje de error (null si exitoso)
-     */
     private void sendPrintConfirmation(Long ticketId, boolean success, String error) {
         try {
             Map<String, Object> msg = new LinkedHashMap<>();
@@ -176,7 +138,6 @@ public class POSPrinterAgent extends WebSocketClient {
         String closeBy = remote ? "servidor" : "cliente";
         log("WARN", "Conexión cerrada por " + closeBy + " - Código: " + code + ", Razón: " + reason);
 
-        // Auto-reconexión cada 5 segundos si el agente sigue corriendo
         if (running) {
             scheduleReconnect();
         }
@@ -190,15 +151,11 @@ public class POSPrinterAgent extends WebSocketClient {
             log("ERROR", "Causa: " + ex.getCause().getMessage());
         }
 
-        // Intentar reconexión si hay error y el agente sigue corriendo
         if (running && !isOpen()) {
             scheduleReconnect();
         }
     }
 
-    /**
-     * Programa un reintento de conexión después del delay configurado.
-     */
     private void scheduleReconnect() {
         if (!running) return;
 
@@ -216,9 +173,6 @@ public class POSPrinterAgent extends WebSocketClient {
         }, RECONNECT_DELAY_SECONDS, TimeUnit.SECONDS);
     }
 
-    /**
-     * Detiene el agente y cierra la conexión.
-     */
     public void shutdown() {
         log("INFO", "Deteniendo agente...");
         running = false;
@@ -242,30 +196,18 @@ public class POSPrinterAgent extends WebSocketClient {
         log("INFO", "Agente detenido correctamente");
     }
 
-    /**
-     * Registra un mensaje con timestamp.
-     *
-     * @param level   Nivel del log (INFO, WARN, ERROR, DEBUG)
-     * @param message Mensaje a registrar
-     */
     private static void log(String level, String message) {
         String timestamp = LocalDateTime.now().format(LOG_FORMAT);
         System.out.println(timestamp + " [" + level + "] " + message);
     }
 
-    /**
-     * Punto de entrada principal.
-     * Lee configuración de variables de entorno o archivo properties.
-     */
     public static void main(String[] args) {
         log("INFO", "============================================");
         log("INFO", "    POS PRINTER AGENT - LA PASADITA");
         log("INFO", "============================================");
 
-        // Cargar configuración de archivo properties (si existe)
         Properties fileConfig = loadPropertiesFile(args.length > 0 ? args[0] : "config.properties");
 
-        // Leer configuración con prioridad: ENV > properties > default
         String serverUrl = getConfig("SERVER_URL", "server.url", fileConfig, DEFAULT_SERVER_URL);
         String stationId = getConfig("STATION_ID", "station.id", fileConfig, DEFAULT_STATION_ID);
         String printerPath = getConfig("PRINTER_PATH", "printer.path", fileConfig, DEFAULT_PRINTER_PATH);
@@ -274,12 +216,10 @@ public class POSPrinterAgent extends WebSocketClient {
         String businessAddress = getConfig("BUSINESS_ADDRESS", "business.address", fileConfig, "");
         String businessPhone = getConfig("BUSINESS_PHONE", "business.phone", fileConfig, "");
 
-        // Configuración de báscula
         String scalePort = getConfig("SCALE_PORT", "scale.port", fileConfig, DEFAULT_SCALE_PORT);
         boolean scaleEnabled = Boolean.parseBoolean(getConfig("SCALE_ENABLED", "scale.enabled", fileConfig, String.valueOf(DEFAULT_SCALE_ENABLED)));
         boolean scaleAutoConnect = Boolean.parseBoolean(getConfig("SCALE_AUTO_CONNECT", "scale.autoConnect", fileConfig, String.valueOf(DEFAULT_SCALE_AUTO_CONNECT)));
 
-        // Construir URL con stationId (URL-encoded para prevenir inyección)
         String fullUrl = serverUrl + "?stationId=" + URLEncoder.encode(stationId, StandardCharsets.UTF_8);
 
         log("INFO", "Configuración:");
@@ -298,7 +238,6 @@ public class POSPrinterAgent extends WebSocketClient {
         log("INFO", "  Scale Auto-Connect: " + scaleAutoConnect);
         log("INFO", "============================================");
 
-        // Verificar si se solicita página de prueba
         for (String arg : args) {
             if ("--test".equals(arg) || "-t".equals(arg)) {
                 ESCPOSPrinter testPrinter = new ESCPOSPrinter(businessName, businessAddress, businessPhone, printerPath, printerName);
@@ -315,11 +254,9 @@ public class POSPrinterAgent extends WebSocketClient {
             }
         }
 
-        // Crear instancias
         ESCPOSPrinter printer = new ESCPOSPrinter(businessName, businessAddress, businessPhone, printerPath, printerName);
         log("INFO", "Impresora disponible: " + printer.isAvailable());
 
-        // Iniciar servidor REST de báscula
         ScaleRestServer scaleServer = null;
         if (scaleEnabled) {
             try {
@@ -337,7 +274,6 @@ public class POSPrinterAgent extends WebSocketClient {
             URI serverUri = new URI(fullUrl);
             POSPrinterAgent agent = new POSPrinterAgent(serverUri, stationId, printer);
 
-            // Agregar shutdown hook para cierre limpio
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {
                 log("INFO", "Señal de cierre recibida");
                 agent.shutdown();
@@ -347,11 +283,9 @@ public class POSPrinterAgent extends WebSocketClient {
                 }
             }));
 
-            // Conectar al servidor
             log("INFO", "Conectando al servidor...");
             agent.connect();
 
-            // Mantener el proceso vivo
             while (agent.running) {
                 try {
                     Thread.sleep(1000);
@@ -368,38 +302,20 @@ public class POSPrinterAgent extends WebSocketClient {
         }
     }
 
-    /**
-     * Obtiene un valor de configuración con prioridad: ENV > properties > default.
-     *
-     * @param envKey       Nombre de la variable de entorno
-     * @param propKey      Nombre de la propiedad en el archivo
-     * @param props        Properties cargadas del archivo
-     * @param defaultValue Valor por defecto
-     * @return Valor de configuración
-     */
     private static String getConfig(String envKey, String propKey, Properties props, String defaultValue) {
-        // 1. Primero intentar variable de entorno
         String envValue = System.getenv(envKey);
         if (envValue != null && !envValue.isEmpty()) {
             return envValue;
         }
 
-        // 2. Luego intentar archivo properties
         String propValue = props.getProperty(propKey);
         if (propValue != null && !propValue.isEmpty()) {
             return propValue;
         }
 
-        // 3. Finalmente usar valor por defecto
         return defaultValue;
     }
 
-    /**
-     * Carga la configuración desde un archivo properties.
-     *
-     * @param configFile Ruta al archivo de configuración
-     * @return Properties con la configuración (vacío si no existe)
-     */
     private static Properties loadPropertiesFile(String configFile) {
         Properties props = new Properties();
 
