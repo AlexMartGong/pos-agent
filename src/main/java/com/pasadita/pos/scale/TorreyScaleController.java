@@ -27,9 +27,9 @@ public class TorreyScaleController {
 
     private static final byte[] COMMAND_READ_WEIGHT = {0x57}; // 'W' - Solicitar peso
 
-    private static final int POLLING_INTERVAL = 300;
+    private static final int POLLING_INTERVAL = 100;
 
-    private static final int STABILITY_WINDOW = 5;
+    private static final int STABILITY_WINDOW = 3;
 
     private static final Pattern WEIGHT_PATTERN = Pattern.compile("-?\\d+\\.?\\d*");
 
@@ -255,10 +255,15 @@ public class TorreyScaleController {
                 return WeightReading.error("Error de escritura");
             }
 
-            TimeUnit.MILLISECONDS.sleep(100);
+            TimeUnit.MILLISECONDS.sleep(50);
 
-            byte[] buffer = new byte[32];
-            int bytesRead = serialPort.readBytes(buffer, buffer.length);
+            int available = serialPort.bytesAvailable();
+            if (available <= 0) {
+                return WeightReading.error("Sin datos");
+            }
+
+            byte[] buffer = new byte[available];
+            int bytesRead = serialPort.readBytes(buffer, available);
 
             if (bytesRead > 0) {
                 String response = new String(buffer, 0, bytesRead, StandardCharsets.US_ASCII).trim();

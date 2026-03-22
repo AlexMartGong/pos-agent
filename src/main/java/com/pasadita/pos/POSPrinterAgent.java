@@ -19,6 +19,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -39,6 +40,7 @@ public class POSPrinterAgent extends WebSocketClient {
     private final ObjectMapper objectMapper;
     private final ScheduledExecutorService scheduler;
     private volatile boolean running = true;
+    private final CountDownLatch shutdownLatch = new CountDownLatch(1);
 
     public POSPrinterAgent(URI serverUri, String stationId, ESCPOSPrinter printer) {
         super(serverUri);
@@ -176,6 +178,7 @@ public class POSPrinterAgent extends WebSocketClient {
     public void shutdown() {
         log("INFO", "Deteniendo agente...");
         running = false;
+        shutdownLatch.countDown();
 
         try {
             closeBlocking();
@@ -194,6 +197,10 @@ public class POSPrinterAgent extends WebSocketClient {
         }
 
         log("INFO", "Agente detenido correctamente");
+    }
+
+    public void awaitTermination() throws InterruptedException {
+        shutdownLatch.await();
     }
 
     private static void log(String level, String message) {
@@ -260,7 +267,7 @@ public class POSPrinterAgent extends WebSocketClient {
         ScaleRestServer scaleServer = null;
         if (scaleEnabled) {
             try {
-                scaleServer = new ScaleRestServer(scalePort, scaleEnabled, scaleAutoConnect);
+                scaleServer = new ScaleRestServer(scalePort, true, scaleAutoConnect);
                 scaleServer.start();
                 log("INFO", "Servidor REST de báscula iniciado en http://localhost:8081");
             } catch (Exception e) {
@@ -286,13 +293,10 @@ public class POSPrinterAgent extends WebSocketClient {
             log("INFO", "Conectando al servidor...");
             agent.connect();
 
-            while (agent.running) {
-                try {
-                    Thread.sleep(1000);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    break;
-                }
+            try {
+                agent.awaitTermination();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
             }
 
         } catch (URISyntaxException e) {
