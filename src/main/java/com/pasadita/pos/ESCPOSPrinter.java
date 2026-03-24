@@ -37,6 +37,7 @@ public class ESCPOSPrinter {
     private static final byte[] UNDERLINE_ON = {0x1B, 0x2D, 0x01};
     private static final byte[] UNDERLINE_OFF = {0x1B, 0x2D, 0x00};
     private static final byte[] CHARSET_PC850 = {0x1B, 0x74, 0x02};
+    private static final byte[] OPEN_DRAWER = {0x1B, 0x70, 0x00, 0x19, (byte) 0xFA};
 
     private static final int TICKET_WIDTH = 42;
     private static final String SEPARATOR = "------------------------------------------";
@@ -172,6 +173,7 @@ public class ESCPOSPrinter {
         ByteArrayOutputStream buffer = new ByteArrayOutputStream();
 
         buffer.write(INIT);
+        buffer.write(OPEN_DRAWER);
 
         buffer.write(CHARSET_PC850);
 
@@ -528,6 +530,7 @@ public class ESCPOSPrinter {
 
         ByteArrayOutputStream buffer = new ByteArrayOutputStream();
         buffer.write(INIT);
+        buffer.write(OPEN_DRAWER);
         buffer.write(CHARSET_PC850);
         buffer.write(ALIGN_CENTER);
 
