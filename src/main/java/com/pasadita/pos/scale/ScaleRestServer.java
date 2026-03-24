@@ -33,11 +33,13 @@ public class ScaleRestServer {
     private final String scalePort;
     private final boolean scaleEnabled;
     private final boolean autoConnect;
+    private final String stationId;
 
-    public ScaleRestServer(String scalePort, boolean scaleEnabled, boolean autoConnect) {
+    public ScaleRestServer(String scalePort, boolean scaleEnabled, boolean autoConnect, String stationId) {
         this.scalePort = scalePort;
         this.scaleEnabled = scaleEnabled;
         this.autoConnect = autoConnect;
+        this.stationId = stationId;
         this.objectMapper = new ObjectMapper();
         // Serializar BigDecimal como número plano (ej: 2.110) sin notación científica
         this.objectMapper.configure(JsonGenerator.Feature.WRITE_BIGDECIMAL_AS_PLAIN, true);
@@ -58,6 +60,7 @@ public class ScaleRestServer {
         server.createContext("/api/scale/connect", new ConnectHandler());
         server.createContext("/api/scale/disconnect", new DisconnectHandler());
         server.createContext("/api/scale/ports", new PortsHandler());
+        server.createContext("/api/station", new StationHandler());
 
         // Configurar executor
         server.setExecutor(Executors.newFixedThreadPool(4));
@@ -296,6 +299,25 @@ public class ScaleRestServer {
                 response.put("error", "Error interno al listar puertos");
                 sendResponse(exchange, 500, response);
             }
+        }
+    }
+
+    /**
+     * Handler para GET /api/station
+     */
+    private class StationHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) {
+            if (handleCorsPreflightIfOptions(exchange)) return;
+
+            if (!"GET".equals(exchange.getRequestMethod())) {
+                sendResponse(exchange, 405, createError());
+                return;
+            }
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("stationId", stationId);
+            sendResponse(exchange, 200, response);
         }
     }
 

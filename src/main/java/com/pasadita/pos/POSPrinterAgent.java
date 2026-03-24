@@ -265,14 +265,12 @@ public class POSPrinterAgent extends WebSocketClient {
         log("INFO", "Impresora disponible: " + printer.isAvailable());
 
         ScaleRestServer scaleServer = null;
-        if (scaleEnabled) {
-            try {
-                scaleServer = new ScaleRestServer(scalePort, true, scaleAutoConnect);
-                scaleServer.start();
-                log("INFO", "Servidor REST de báscula iniciado en http://localhost:8081");
-            } catch (Exception e) {
-                log("ERROR", "Error al iniciar servidor REST de báscula: " + e.getMessage());
-            }
+        try {
+            scaleServer = new ScaleRestServer(scalePort, scaleEnabled, scaleAutoConnect, stationId);
+            scaleServer.start();
+            log("INFO", "Servidor REST iniciado en http://localhost:8081");
+        } catch (Exception e) {
+            log("ERROR", "Error al iniciar servidor REST: " + e.getMessage());
         }
 
         final ScaleRestServer finalScaleServer = scaleServer;
