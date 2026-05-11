@@ -1,4 +1,4 @@
-package com.agent.pos;
+package com.agent.pos.printer;
 
 import com.agent.pos.dto.SaleDetailDTO;
 import com.agent.pos.dto.TicketDTO;
@@ -123,7 +123,6 @@ public class ESCPOSPrinter {
         if (printerName != null && !printerName.isEmpty()) {
             return printerName;
         }
-        // Si printerPath no es un path de Linux, usarlo como nombre de impresora
         if (printerPath != null && !printerPath.startsWith("/dev/")) {
             return printerPath;
         }
