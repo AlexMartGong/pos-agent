@@ -1,4 +1,4 @@
-package com.pasadita.pos.scale;
+package com.agent.pos.scale;
 
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.ObjectMapper;

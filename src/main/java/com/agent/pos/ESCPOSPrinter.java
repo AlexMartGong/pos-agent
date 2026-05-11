@@ -1,7 +1,7 @@
-package com.pasadita.pos;
+package com.agent.pos;
 
-import com.pasadita.pos.dto.SaleDetailDTO;
-import com.pasadita.pos.dto.TicketDTO;
+import com.agent.pos.dto.SaleDetailDTO;
+import com.agent.pos.dto.TicketDTO;
 
 import javax.print.*;
 import javax.print.attribute.HashPrintRequestAttributeSet;

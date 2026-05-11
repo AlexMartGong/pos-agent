@@ -1,4 +1,4 @@
-package com.pasadita.pos.dto;
+package com.agent.pos.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 

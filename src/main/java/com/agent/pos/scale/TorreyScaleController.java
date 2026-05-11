@@ -1,4 +1,4 @@
-package com.pasadita.pos.scale;
+package com.agent.pos.scale;
 
 import com.fazecast.jSerialComm.SerialPort;
 import org.slf4j.Logger;

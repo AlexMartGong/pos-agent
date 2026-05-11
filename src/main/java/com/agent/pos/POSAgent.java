@@ -1,9 +1,9 @@
-package com.pasadita.pos;
+package com.agent.pos;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import com.pasadita.pos.dto.TicketDTO;
-import com.pasadita.pos.scale.ScaleRestServer;
+import com.agent.pos.dto.TicketDTO;
+import com.agent.pos.scale.ScaleRestServer;
 import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
 
@@ -24,7 +24,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
-public class POSPrinterAgent extends WebSocketClient {
+public class POSAgent extends WebSocketClient {
     private static final String DEFAULT_SERVER_URL = "ws://localhost:8080/ws/printer";
     private static final String DEFAULT_STATION_ID = "POS1";
     private static final String DEFAULT_PRINTER_PATH = "/dev/usb/lp0";
@@ -42,7 +42,7 @@ public class POSPrinterAgent extends WebSocketClient {
     private volatile boolean running = true;
     private final CountDownLatch shutdownLatch = new CountDownLatch(1);
 
-    public POSPrinterAgent(URI serverUri, String stationId, ESCPOSPrinter printer) {
+    public POSAgent(URI serverUri, String stationId, ESCPOSPrinter printer) {
         super(serverUri);
         this.stationId = stationId;
         this.printer = printer;
@@ -277,7 +277,7 @@ public class POSPrinterAgent extends WebSocketClient {
 
         try {
             URI serverUri = new URI(fullUrl);
-            POSPrinterAgent agent = new POSPrinterAgent(serverUri, stationId, printer);
+            POSAgent agent = new POSAgent(serverUri, stationId, printer);
 
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {
                 log("INFO", "Señal de cierre recibida");

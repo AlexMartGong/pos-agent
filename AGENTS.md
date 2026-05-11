@@ -1,136 +1,49 @@
 # AGENTS.md
 
-## AI Coding Agent Guidance for POS Printer Agent
+## Role
+Act as a Senior Java Developer specializing in hardware integration, embedded systems, communication protocols (WebSockets, Serial/USB), and peripheral management for Point of Sale (POS) systems.
 
-This document summarizes essential knowledge and actionable conventions for AI agents working in this codebase. It is based on project documentation and code structure as of March 2026.
+## Context
+You are assisting in the development and maintenance of `pos-agent`, a lightweight local Java agent that serves as a bridge between the main cloud-based POS ecosystem (designed for grocery stores, fruit shops, and butcher shops) and the client's physical hardware.
 
----
+The system relies on two independent subsystems running concurrently within a single JVM:
+1. **WebSocket Printer Client (`POSAgent`):** Connects to the backend at `ws://host/ws/printer?stationId=X`. It receives `TicketDTO` JSON objects, processes them, and outputs to a thermal printer via ESC/POS commands, subsequently responding with a `PRINT_RESULT`. It features an automatic reconnection mechanism that triggers every 5 seconds upon disconnection.
+2. **Scale REST Server (`ScaleRestServer`):** A lightweight HTTP server utilizing `com.sun.net.httpserver` on `localhost:8081`. It manages a `TorreyScaleController` via serial port (9600 baud, command `0x57`). It polls the scale every 100ms on a daemon thread and serves the weight reading from cache. CORS is strictly restricted to `https://lapasadita.app`.
 
-### 1. Architecture & Major Components
+## Exact Task
+Your objective is to analyze, debug, refactor, or extend the codebase of this repository upon request. You must ensure the stability of the real-time connection, the accuracy of the scale readings, and the proper formatting, printing, and cutting of tickets. This must be achieved without introducing heavy dependencies or altering the core architecture.
 
-- **POSPrinterAgent** (`src/main/java/com/pasadita/pos/POSPrinterAgent.java`):
-  - Main entry point. Extends `WebSocketClient`.
-  - Handles WebSocket connection to backend, auto-reconnects on failure.
-  - Receives ticket JSON, deserializes with Jackson, prints via `ESCPOSPrinter`.
-  - Sends confirmation JSON back to backend (`CONNECTED`, `PRINT_RESULT`).
-  - Starts scale REST server if enabled.
+## Strict Rules
 
-- **ESCPOSPrinter** (`src/main/java/com/pasadita/pos/ESCPOSPrinter.java`):
-  - Generates ESC/POS commands for Epson TM-T88V printers.
-  - Detects ticket type (cash register vs delivery) based on `deliveryOrderId` and `deliveryAddress`.
-  - Cross-platform: Direct device file on Linux, Java PrintService on Windows.
-  - 80mm printer support (42 chars/line), PC850 charset for Spanish.
+1. **Dependencies:** Do not introduce heavy web frameworks (such as Spring Boot) into this agent. Maintain the exclusive use of native `com.sun.net.httpserver`, `Java-WebSocket`, and `jSerialComm`.
+2. **ESC/POS Formatting:**
+    - The strict ticket width is exactly 42 characters.
+    - Product names exceeding 18 characters must wrap to continuation lines.
+    - All text MUST be encoded in `ISO-8859-1` (PC850 charset).
+3. **Ticket Routing Logic:**
+    - *Cash Register Ticket (`deliveryOrderId == null`):* Must execute the command to open the cash drawer (`0x1B 0x70 0x00 0x19 0xFA`), print the ticket number, and cut the paper.
+    - *Delivery Ticket (`deliveryOrderId != null`):* DO NOT open the cash drawer. Must include the "PEDIDO A DOMICILIO" header and the customer's delivery address.
+4. **Configuration Priority:** You must resolve configuration values following this strict hierarchy: Environment Variables > `config.properties` file > Hardcoded defaults.
+5. **Cross-Platform Compatibility:** The agent must operate natively on Linux/Ubuntu (by writing raw bytes directly to device files such as `/dev/usb/lp0` or `/dev/ttyACM0`) and on Windows (utilizing the `javax.print` API or running as a service via WinSW).
+6. **Testing Constraints:** There are currently no automated tests in this project. Do not assume test suites can be executed to verify proposed changes.
 
-- **Scale Integration** (`src/main/java/com/pasadita/pos/scale/`):
-  - `TorreyScaleController`: Serial comms with Torrey PCR scales (jSerialComm).
-    - Polling-based architecture: dedicated daemon thread reads weight every 300ms, caches results in a volatile `WeightReading` record.
-    - `readWeight()` returns instantly from cache (non-blocking).
-    - Physical disconnect detection: after 5 consecutive read errors, marks scale as disconnected.
-    - `WeightReading` is a Java `record` (not a class).
-  - `ScaleRestServer`: Lightweight HTTP server (port 8081, no Spring Boot).
-    - Binds to loopback address only (`InetAddress.getLoopbackAddress()`) for security.
-    - Endpoints: `/api/scale/weight`, `/api/scale/status`, `/api/scale/connect`, `/api/scale/disconnect`, `/api/scale/ports`.
-    - CORS restricted to production origin `https://lapasadita.app` (not wildcard).
+## Output Format
+- **Code Delivery:** Provide only the modified code blocks or the specific patches required. Do not rewrite or output entire classes if only a minor modification is needed.
+- **Explanations:** Keep explanations direct and concise. Only detail the reasoning behind a change if it involves complex hardware logic, such as ESC/POS byte sequences or serial port operations.
+- **Execution Commands:** If you suggest verifying a change, strictly use the project's official build and execution commands:
 
-- **DTOs** (`src/main/java/com/pasadita/pos/dto/`):
-  - `TicketDTO`, `SaleDetailDTO`: Data transfer objects for tickets and sale lines.
-  - Annotated with `@JsonIgnoreProperties(ignoreUnknown = true)` for forward compatibility with backend changes.
-
-- **Exceptions** in `ESCPOSPrinter`:
-  - `PrinterException`: Primary exception for printer errors.
-  - `USBException`: Deprecated alias for `PrinterException` — use `PrinterException` in new code.
-
----
-
-### 2. Data Flow & Protocols
-
-- Backend sends ticket JSON via WebSocket → `POSPrinterAgent` → `ESCPOSPrinter` → printer device.
-- Confirmation JSON sent back to backend after print attempt.
-- Ticket type detection logic in `ESCPOSPrinter.isDeliveryOrder()`:
-  - Delivery: `deliveryOrderId != null && deliveryAddress != null && !deliveryAddress.isEmpty()`
-  - Cash register: otherwise.
-- Delivery tickets emphasize customer/delivery info and payment status.
-
----
-
-### 3. Build, Run, and Packaging
-
-- **Build:**
-  - `mvn clean package` → `target/pos-printer-agent.jar` (all dependencies included)
-- **Run:**
-  - `java -jar target/pos-printer-agent.jar [config.properties|--test]`
-- **Windows Installer:**
-  - `build-installer.bat` (Windows)
-- **Windows Service Package:**
-  - `./build-service-package.sh` (Linux) or `build-service-package.bat` (Windows)
-  - Output: `target/pos-printer-agent-service/` (includes service wrapper, config, scripts)
-
----
-
-### 4. Configuration & Environment
-
-- **Config priority:** ENV vars > `config.properties` > defaults
-- **Key ENV vars:** `SERVER_URL`, `STATION_ID`, `PRINTER_PATH`, `PRINTER_NAME`, `BUSINESS_NAME`, `BUSINESS_ADDRESS`, `BUSINESS_PHONE`, `SCALE_PORT`, `SCALE_ENABLED`, `SCALE_AUTO_CONNECT`
-- **Linux permissions:**
-  - Printer: Add user to `lp` group or `chmod 666 /dev/usb/lp0`
-  - Scale: Add user to `dialout` group
-
----
-
-### 5. Project Patterns & Conventions
-
-- **Auto-reconnect:** 5s delay on WebSocket disconnect/error.
-- **Direct device I/O:** Printer accessed as file on Linux for simplicity.
-- **Character encoding:** ISO-8859-1 for ESC/POS, PC850 for Spanish.
-- **Ticket width:** 42 chars for 80mm printers.
-- **Shutdown hook:** Graceful cleanup on SIGTERM/SIGINT.
-- **No Spring Boot:** REST server is a minimal custom HTTP server.
-- **Dependencies:** Java-WebSocket, Jackson, jSerialComm, SLF4J.
-
----
-
-### 6. Key Files & Structure
-
-```
-pos-printer-agent/
-├── pom.xml
-├── config.properties
-├── CLAUDE.md
-├── README.md
-├── build-installer.sh
-├── build-service-package.sh
-├── service/
-│   ├── install-service.bat
-│   ├── pos-printer-agent.xml
-│   └── uninstall-service.bat
-└── src/main/java/com/pasadita/pos/
-    ├── POSPrinterAgent.java
-    ├── ESCPOSPrinter.java
-    ├── dto/
-    │   ├── TicketDTO.java
-    │   └── SaleDetailDTO.java
-    └── scale/
-        ├── TorreyScaleController.java
-        └── ScaleRestServer.java
-```
-
----
-
-### 7. Integration Points
-
-- **WebSocket:** Main communication with backend for ticketing.
-- **Serial port:** For Torrey scale integration (configurable port).
-- **REST API:** For local scale access (port 8081, loopback only, CORS restricted to `https://lapasadita.app`).
-
----
-
-### 8. Examples
-
-- **Print test page:** `java -jar target/pos-printer-agent.jar --test`
-- **Custom config:** `java -jar target/pos-printer-agent.jar /path/to/config.properties`
-- **Linux printer permissions:** `sudo usermod -a -G lp $USER` or `sudo chmod 666 /dev/usb/lp0`
-
----
-
-For more details, see `README.md` and `CLAUDE.md`.
-
+  ```bash
+  # Build fat JAR with all dependencies
+  mvn clean package
+  
+  # Run with default configuration
+  java -jar target/pos-agent.jar
+  
+  # Run with custom configuration file
+  java -jar target/pos-agent.jar /path/to/config.properties
+  
+  # Print test page to verify printer connectivity
+  java -jar target/pos-agent.jar --test
+  
+  # Build Linux .deb installer
+  ./build-installer.sh
