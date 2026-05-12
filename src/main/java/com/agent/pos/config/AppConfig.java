@@ -5,15 +5,13 @@ import com.agent.pos.printer.ESCPOSPrinter;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Properties;
 
 public class AppConfig {
 
-    private static final String DEFAULT_SERVER_URL = "ws://localhost:8080/ws/printer";
+    private static final int DEFAULT_HTTP_PORT = 8081;
     private static final String DEFAULT_STATION_ID = "POS1";
     private static final String DEFAULT_PRINTER_PATH = "/dev/usb/lp0";
     private static final String DEFAULT_SCALE_PORT = "/dev/ttyACM0";
@@ -22,7 +20,7 @@ public class AppConfig {
 
     private static final DateTimeFormatter LOG_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
-    private final String serverUrl;
+    private final int httpPort;
     private final String stationId;
     private final String printerPath;
     private final String printerName;
@@ -33,10 +31,9 @@ public class AppConfig {
     private final boolean scaleEnabled;
     private final boolean scaleAutoConnect;
     private final boolean testMode;
-    private final String fullWsUrl;
 
     private AppConfig(Builder builder) {
-        this.serverUrl = builder.serverUrl;
+        this.httpPort = builder.httpPort;
         this.stationId = builder.stationId;
         this.printerPath = builder.printerPath;
         this.printerName = builder.printerName;
@@ -47,10 +44,9 @@ public class AppConfig {
         this.scaleEnabled = builder.scaleEnabled;
         this.scaleAutoConnect = builder.scaleAutoConnect;
         this.testMode = builder.testMode;
-        this.fullWsUrl = serverUrl + "?stationId=" + URLEncoder.encode(stationId, StandardCharsets.UTF_8);
     }
 
-    public String getServerUrl() { return serverUrl; }
+    public int getHttpPort() { return httpPort; }
     public String getStationId() { return stationId; }
     public String getPrinterPath() { return printerPath; }
     public String getPrinterName() { return printerName; }
@@ -61,7 +57,6 @@ public class AppConfig {
     public boolean isScaleEnabled() { return scaleEnabled; }
     public boolean isScaleAutoConnect() { return scaleAutoConnect; }
     public boolean isTestMode() { return testMode; }
-    public String getFullWsUrl() { return fullWsUrl; }
 
     public static AppConfig load(String[] args) {
         boolean testMode = false;
@@ -78,7 +73,7 @@ public class AppConfig {
         Properties fileConfig = loadPropertiesFile(configFilePath);
 
         return new Builder()
-                .serverUrl(resolve("SERVER_URL", "server.url", fileConfig, DEFAULT_SERVER_URL))
+                .httpPort(Integer.parseInt(resolve("HTTP_PORT", "http.port", fileConfig, String.valueOf(DEFAULT_HTTP_PORT))))
                 .stationId(resolve("STATION_ID", "station.id", fileConfig, DEFAULT_STATION_ID))
                 .printerPath(resolve("PRINTER_PATH", "printer.path", fileConfig, DEFAULT_PRINTER_PATH))
                 .printerName(resolve("PRINTER_NAME", "printer.name", fileConfig, ""))
@@ -111,19 +106,18 @@ public class AppConfig {
 
         try (InputStream input = new FileInputStream(configFile)) {
             props.load(input);
-            log("Configuración cargada desde: " + configFile);
+            log("Configuracion cargada desde: " + configFile);
         } catch (IOException e) {
-            log("Archivo de configuración no encontrado, usando ENV/defaults");
+            log("Archivo de configuracion no encontrado, usando ENV/defaults");
         }
 
         return props;
     }
 
     public void logConfig() {
-        log("Configuración:");
+        log("Configuracion:");
         log("  Station ID: " + stationId);
-        log("  Server URL: " + fullWsUrl);
-        log("  Conexión segura (WSS): " + serverUrl.startsWith("wss://"));
+        log("  HTTP Port: " + httpPort);
         log("  Sistema Operativo: " + (ESCPOSPrinter.isWindows() ? "Windows" : "Linux"));
         if (ESCPOSPrinter.isWindows()) {
             log("  Printer Name (Windows): " + (printerName.isEmpty() ? "(no configurado)" : printerName));
@@ -143,7 +137,7 @@ public class AppConfig {
     }
 
     public static class Builder {
-        private String serverUrl;
+        private int httpPort = DEFAULT_HTTP_PORT;
         private String stationId;
         private String printerPath;
         private String printerName;
@@ -155,7 +149,7 @@ public class AppConfig {
         private boolean scaleAutoConnect;
         private boolean testMode;
 
-        public Builder serverUrl(String serverUrl) { this.serverUrl = serverUrl; return this; }
+        public Builder httpPort(int httpPort) { this.httpPort = httpPort; return this; }
         public Builder stationId(String stationId) { this.stationId = stationId; return this; }
         public Builder printerPath(String printerPath) { this.printerPath = printerPath; return this; }
         public Builder printerName(String printerName) { this.printerName = printerName; return this; }

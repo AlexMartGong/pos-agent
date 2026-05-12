@@ -1,5 +1,6 @@
 package com.agent.pos.scale;
 
+import com.agent.pos.config.CorsUtils;
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
@@ -10,51 +11,37 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.OutputStream;
-import java.net.InetAddress;
-import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.Executors;
 
-/**
- * Servidor REST simple para báscula usando HttpServer de Java
- * Sin dependencias de Spring Boot
- */
 public class ScaleRestServer {
 
     private static final Logger logger = LoggerFactory.getLogger(ScaleRestServer.class);
-    private static final int PORT = 8081;
 
-    private HttpServer server;
-    private TorreyScaleController scaleController;
+    private final HttpServer server;
     private final ObjectMapper objectMapper;
+
+    private TorreyScaleController scaleController;
 
     private final String scalePort;
     private final boolean scaleEnabled;
     private final boolean autoConnect;
     private final String stationId;
 
-    public ScaleRestServer(String scalePort, boolean scaleEnabled, boolean autoConnect, String stationId) {
+    public ScaleRestServer(HttpServer server, String scalePort, boolean scaleEnabled, boolean autoConnect, String stationId) {
+        this.server = server;
         this.scalePort = scalePort;
         this.scaleEnabled = scaleEnabled;
         this.autoConnect = autoConnect;
         this.stationId = stationId;
         this.objectMapper = new ObjectMapper();
-        // Serializar BigDecimal como número plano (ej: 2.110) sin notación científica
         this.objectMapper.configure(JsonGenerator.Feature.WRITE_BIGDECIMAL_AS_PLAIN, true);
     }
 
-    /**
-     * Inicia el servidor REST
-     */
-    public void start() throws IOException {
-        logger.info("Iniciando servidor REST en puerto {}...", PORT);
+    public void start() {
+        logger.info("Registrando endpoints REST de báscula...");
 
-        // Crear servidor HTTP
-        server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), PORT), 0);
-
-        // Configurar endpoints
         server.createContext("/api/scale/weight", new WeightHandler());
         server.createContext("/api/scale/status", new StatusHandler());
         server.createContext("/api/scale/connect", new ConnectHandler());
@@ -62,10 +49,6 @@ public class ScaleRestServer {
         server.createContext("/api/scale/ports", new PortsHandler());
         server.createContext("/api/station", new StationHandler());
 
-        // Configurar executor
-        server.setExecutor(Executors.newFixedThreadPool(4));
-
-        // Inicializar báscula si está habilitada
         if (scaleEnabled) {
             logger.info("Báscula habilitada en puerto: {}", scalePort);
             scaleController = new TorreyScaleController(scalePort);
@@ -78,36 +61,21 @@ public class ScaleRestServer {
             logger.warn("Báscula deshabilitada en configuración");
         }
 
-        // Iniciar servidor
-        server.start();
-        logger.info("Servidor REST iniciado en http://localhost:{}", PORT);
+        logger.info("Endpoints de báscula registrados");
     }
 
-    /**
-     * Detiene el servidor REST
-     */
     public void stop() {
-        if (server != null) {
-            logger.info("Deteniendo servidor REST...");
-            server.stop(0);
-        }
-
         if (scaleController != null && scaleController.isConnected()) {
             logger.info("Desconectando báscula...");
             scaleController.disconnect();
         }
     }
 
-    /**
-     * Handler para GET /api/scale/weight
-     */
     private class WeightHandler implements HttpHandler {
         @Override
-        public void handle(HttpExchange exchange) {
-            // Manejar CORS preflight
-            if (handleCorsPreflightIfOptions(exchange)) return;
+        public void handle(HttpExchange exchange) throws IOException {
+            if (CorsUtils.handlePreflightIfOptions(exchange)) return;
 
-            // Solo permitir GET
             if (!"GET".equals(exchange.getRequestMethod())) {
                 sendResponse(exchange, 405, createError());
                 return;
@@ -157,14 +125,10 @@ public class ScaleRestServer {
         }
     }
 
-    /**
-     * Handler para GET /api/scale/status
-     */
     private class StatusHandler implements HttpHandler {
         @Override
-        public void handle(HttpExchange exchange) {
-            // Manejar CORS preflight
-            if (handleCorsPreflightIfOptions(exchange)) return;
+        public void handle(HttpExchange exchange) throws IOException {
+            if (CorsUtils.handlePreflightIfOptions(exchange)) return;
 
             if (!"GET".equals(exchange.getRequestMethod())) {
                 sendResponse(exchange, 405, createError());
@@ -187,14 +151,10 @@ public class ScaleRestServer {
         }
     }
 
-    /**
-     * Handler para POST /api/scale/connect
-     */
     private class ConnectHandler implements HttpHandler {
         @Override
-        public void handle(HttpExchange exchange) {
-            // Manejar CORS preflight
-            if (handleCorsPreflightIfOptions(exchange)) return;
+        public void handle(HttpExchange exchange) throws IOException {
+            if (CorsUtils.handlePreflightIfOptions(exchange)) return;
 
             if (!"POST".equals(exchange.getRequestMethod())) {
                 sendResponse(exchange, 405, createError());
@@ -237,14 +197,10 @@ public class ScaleRestServer {
         }
     }
 
-    /**
-     * Handler para POST /api/scale/disconnect
-     */
     private class DisconnectHandler implements HttpHandler {
         @Override
-        public void handle(HttpExchange exchange) {
-            // Manejar CORS preflight
-            if (handleCorsPreflightIfOptions(exchange)) return;
+        public void handle(HttpExchange exchange) throws IOException {
+            if (CorsUtils.handlePreflightIfOptions(exchange)) return;
 
             if (!"POST".equals(exchange.getRequestMethod())) {
                 sendResponse(exchange, 405, createError());
@@ -268,14 +224,10 @@ public class ScaleRestServer {
         }
     }
 
-    /**
-     * Handler para GET /api/scale/ports
-     */
     private class PortsHandler implements HttpHandler {
         @Override
-        public void handle(HttpExchange exchange) {
-            // Manejar CORS preflight
-            if (handleCorsPreflightIfOptions(exchange)) return;
+        public void handle(HttpExchange exchange) throws IOException {
+            if (CorsUtils.handlePreflightIfOptions(exchange)) return;
 
             if (!"GET".equals(exchange.getRequestMethod())) {
                 sendResponse(exchange, 405, createError());
@@ -302,13 +254,10 @@ public class ScaleRestServer {
         }
     }
 
-    /**
-     * Handler para GET /api/station
-     */
     private class StationHandler implements HttpHandler {
         @Override
-        public void handle(HttpExchange exchange) {
-            if (handleCorsPreflightIfOptions(exchange)) return;
+        public void handle(HttpExchange exchange) throws IOException {
+            if (CorsUtils.handlePreflightIfOptions(exchange)) return;
 
             if (!"GET".equals(exchange.getRequestMethod())) {
                 sendResponse(exchange, 405, createError());
@@ -321,65 +270,29 @@ public class ScaleRestServer {
         }
     }
 
-    // Origen permitido para CORS (frontend de producción)
-    private static final String ALLOWED_ORIGIN = "https://lapasadita.app";
-
-    /**
-     * Envía una respuesta JSON
-     */
     private void sendResponse(HttpExchange exchange, int statusCode, Map<String, Object> data) {
         try {
-            // Agregar headers CORS - solo permitir origen de producción
-            exchange.getResponseHeaders().add("Access-Control-Allow-Origin", ALLOWED_ORIGIN);
-            exchange.getResponseHeaders().add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-            exchange.getResponseHeaders().add("Access-Control-Allow-Headers", "Content-Type");
+            CorsUtils.addCorsHeaders(exchange);
             exchange.getResponseHeaders().add("Content-Type", "application/json");
 
-            // Convertir a JSON
             String jsonResponse = objectMapper.writeValueAsString(data);
             byte[] responseBytes = jsonResponse.getBytes(StandardCharsets.UTF_8);
 
-            // Enviar respuesta
             exchange.sendResponseHeaders(statusCode, responseBytes.length);
             try (OutputStream os = exchange.getResponseBody()) {
                 os.write(responseBytes);
             }
         } catch (IOException e) {
-            // Ignorar "Broken pipe" - el cliente cerró la conexión antes de recibir respuesta
-            // Esto es normal con polling frecuente
             if (!e.getMessage().contains("Tubería rota") && !e.getMessage().contains("Broken pipe")) {
                 logger.warn("Error enviando respuesta: {}", e.getMessage());
             }
         }
     }
 
-    /**
-     * Crea un mapa de error
-     */
     private Map<String, Object> createError() {
         Map<String, Object> error = new HashMap<>();
         error.put("success", false);
         error.put("error", "Método no permitido");
         return error;
-    }
-
-    /**
-     * Maneja solicitudes OPTIONS preflight para CORS
-     * @return true si fue una solicitud OPTIONS (ya manejada), false si debe continuar procesando
-     */
-    private boolean handleCorsPreflightIfOptions(HttpExchange exchange) {
-        if ("OPTIONS".equals(exchange.getRequestMethod())) {
-            try {
-                exchange.getResponseHeaders().add("Access-Control-Allow-Origin", ALLOWED_ORIGIN);
-                exchange.getResponseHeaders().add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-                exchange.getResponseHeaders().add("Access-Control-Allow-Headers", "Content-Type");
-                exchange.getResponseHeaders().add("Access-Control-Max-Age", "86400"); // Cache preflight 24h
-                exchange.sendResponseHeaders(204, -1); // No content
-            } catch (IOException e) {
-                logger.warn("Error enviando respuesta preflight: {}", e.getMessage());
-            }
-            return true;
-        }
-        return false;
     }
 }
