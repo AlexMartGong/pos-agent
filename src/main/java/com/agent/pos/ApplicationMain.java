@@ -31,7 +31,7 @@ public class ApplicationMain {
         if (config.isTestMode()) {
             ESCPOSPrinter testPrinter = new ESCPOSPrinter(
                     config.getBusinessName(), config.getBusinessAddress(),
-                    config.getBusinessPhone(), config.getPrinterPath(), config.getPrinterName());
+                    config.getBusinessPhone(), config.getPrinterPath(), config.getPrinterName(), config.getPrinterPort());
             try {
                 log("INFO", "Imprimiendo página de prueba...");
                 testPrinter.printTestPage();
@@ -47,7 +47,7 @@ public class ApplicationMain {
 
         ESCPOSPrinter printer = new ESCPOSPrinter(
                 config.getBusinessName(), config.getBusinessAddress(),
-                config.getBusinessPhone(), config.getPrinterPath(), config.getPrinterName());
+                config.getBusinessPhone(), config.getPrinterPath(), config.getPrinterName(), config.getPrinterPort());
         log("INFO", "Impresora disponible: " + printer.isAvailable());
 
         ObjectMapper objectMapper = new ObjectMapper();

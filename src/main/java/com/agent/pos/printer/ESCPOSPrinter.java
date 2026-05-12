@@ -10,13 +10,23 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.math.BigDecimal;
+import java.net.InetSocketAddress;
+import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.regex.Pattern;
 
 public class ESCPOSPrinter {
     private static final String DEFAULT_PRINTER_PATH = "/dev/usb/lp0";
+    private static final int DEFAULT_NETWORK_PORT = 9100;
+    private static final int CONNECTION_TIMEOUT_MS = 5000;
+    private static final int AVAILABILITY_TIMEOUT_MS = 2000;
+    private static final Pattern IPv4_PATTERN = Pattern.compile(
+            "^((25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\.){3}(25[0-5]|2[0-4]\\d|[01]?\\d\\d?)$"
+    );
 
     private static final boolean IS_WINDOWS = System.getProperty("os.name").toLowerCase().contains("windows");
 
@@ -43,31 +53,38 @@ public class ESCPOSPrinter {
     private static final String SEPARATOR = "------------------------------------------";
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss");
 
-    private final String businessName;
+private final String businessName;
     private final String businessAddress;
     private final String businessPhone;
     private final String printerPath;
     private final String printerName;
+    private final int printerPort;
 
     public ESCPOSPrinter(String businessName, String businessAddress, String businessPhone,
-                         String printerPath, String printerName) {
+                          String printerPath, String printerName, int printerPort) {
         this.businessName = businessName;
         this.businessAddress = businessAddress;
         this.businessPhone = businessPhone;
         this.printerPath = printerPath != null ? printerPath : DEFAULT_PRINTER_PATH;
         this.printerName = printerName;
+        this.printerPort = printerPort > 0 ? printerPort : DEFAULT_NETWORK_PORT;
+    }
+
+    public ESCPOSPrinter(String businessName, String businessAddress, String businessPhone,
+                          String printerPath, String printerName) {
+        this(businessName, businessAddress, businessPhone, printerPath, printerName, DEFAULT_NETWORK_PORT);
     }
 
     public ESCPOSPrinter(String businessName, String businessAddress, String businessPhone, String printerPath) {
-        this(businessName, businessAddress, businessPhone, printerPath, null);
+        this(businessName, businessAddress, businessPhone, printerPath, null, DEFAULT_NETWORK_PORT);
     }
 
     public ESCPOSPrinter(String businessName, String businessAddress, String businessPhone) {
-        this(businessName, businessAddress, businessPhone, DEFAULT_PRINTER_PATH, null);
+        this(businessName, businessAddress, businessPhone, DEFAULT_PRINTER_PATH, null, DEFAULT_NETWORK_PORT);
     }
 
     public ESCPOSPrinter() {
-        this("LA PASADITA", "", "", DEFAULT_PRINTER_PATH, null);
+        this("LA PASADITA", "", "", DEFAULT_PRINTER_PATH, null, DEFAULT_NETWORK_PORT);
     }
 
     public void print(TicketDTO ticket) throws PrinterException, IOException {
@@ -75,7 +92,9 @@ public class ESCPOSPrinter {
 
         byte[] commands = generateESCPOS(ticket);
 
-        if (IS_WINDOWS) {
+        if (isNetworkPrinter()) {
+            printToNetworkPrinter(commands, printerPath, printerPort, "Ticket #" + ticket.getId());
+        } else if (IS_WINDOWS) {
             printToWindowsPrinter(commands, "Ticket #" + ticket.getId());
         } else {
             printToLinuxDevice(commands, "Ticket #" + ticket.getId());
@@ -92,6 +111,30 @@ public class ESCPOSPrinter {
         } catch (IOException e) {
             System.err.println("[ERROR] Error escribiendo a impresora: " + e.getMessage());
             throw new PrinterException("No se pudo escribir en " + printerPath + ": " + e.getMessage(), e);
+        }
+    }
+
+    private boolean isNetworkPrinter() {
+        return isNetworkPrinterPath(printerPath);
+    }
+
+    public static boolean isNetworkPrinterPath(String path) {
+        return path != null && IPv4_PATTERN.matcher(path).matches();
+    }
+
+    private void printToNetworkPrinter(byte[] data, String ip, int port, String description) throws PrinterException {
+        System.out.println("Enviando a impresora de red (Ethernet): " + ip + ":" + port);
+
+        try (Socket socket = new Socket()) {
+            socket.connect(new InetSocketAddress(ip, port), CONNECTION_TIMEOUT_MS);
+            try (OutputStream out = socket.getOutputStream()) {
+                out.write(data);
+                out.flush();
+            }
+            System.out.println("[OK] " + description + " enviado a impresora de red correctamente");
+        } catch (IOException e) {
+            System.err.println("[ERROR] Error enviando a impresora de red: " + e.getMessage());
+            throw new PrinterException("No se pudo conectar con la impresora de red " + ip + ":" + port + ": " + e.getMessage(), e);
         }
     }
 
@@ -535,7 +578,14 @@ public class ESCPOSPrinter {
     public void printTestPage() throws PrinterException, IOException {
         System.out.println("Generando página de prueba...");
 
-        String printerInfo = IS_WINDOWS ? getEffectivePrinterName() : printerPath;
+        String printerInfo;
+        if (isNetworkPrinter()) {
+            printerInfo = printerPath + ":" + printerPort;
+        } else if (IS_WINDOWS) {
+            printerInfo = getEffectivePrinterName();
+        } else {
+            printerInfo = printerPath;
+        }
 
         ByteArrayOutputStream buffer = new ByteArrayOutputStream();
         buffer.write(INIT);
@@ -558,7 +608,11 @@ public class ESCPOSPrinter {
         buffer.write(LINE_FEED);
         buffer.write(LINE_FEED);
 
-        buffer.write(("Sistema: " + (IS_WINDOWS ? "Windows" : "Linux")).getBytes(StandardCharsets.ISO_8859_1));
+        if (isNetworkPrinter()) {
+            buffer.write("Sistema: Red (Ethernet)".getBytes(StandardCharsets.ISO_8859_1));
+        } else {
+            buffer.write(("Sistema: " + (IS_WINDOWS ? "Windows" : "Linux")).getBytes(StandardCharsets.ISO_8859_1));
+        }
         buffer.write(LINE_FEED);
         buffer.write(("Impresora: " + printerInfo).getBytes(StandardCharsets.ISO_8859_1));
         buffer.write(LINE_FEED);
@@ -571,7 +625,9 @@ public class ESCPOSPrinter {
 
         buffer.write(CUT_PAPER_FEED);
 
-        if (IS_WINDOWS) {
+        if (isNetworkPrinter()) {
+            printToNetworkPrinter(buffer.toByteArray(), printerPath, printerPort, "Pagina de prueba");
+        } else if (IS_WINDOWS) {
             printToWindowsPrinter(buffer.toByteArray(), "Pagina de prueba");
         } else {
             printToLinuxDevice(buffer.toByteArray(), "Pagina de prueba");
@@ -579,7 +635,14 @@ public class ESCPOSPrinter {
     }
 
     public boolean isAvailable() {
-        if (IS_WINDOWS) {
+        if (isNetworkPrinter()) {
+            try (Socket socket = new Socket()) {
+                socket.connect(new InetSocketAddress(printerPath, printerPort), AVAILABILITY_TIMEOUT_MS);
+                return true;
+            } catch (IOException e) {
+                return false;
+            }
+        } else if (IS_WINDOWS) {
             String effectiveName = getEffectivePrinterName();
             return effectiveName != null && findPrintService(effectiveName) != null;
         } else {
@@ -590,6 +653,10 @@ public class ESCPOSPrinter {
 
     public static boolean isWindows() {
         return IS_WINDOWS;
+    }
+
+    public int getPrinterPort() {
+        return printerPort;
     }
 
     public static class PrinterException extends Exception {

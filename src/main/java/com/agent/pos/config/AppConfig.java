@@ -14,6 +14,7 @@ public class AppConfig {
     private static final int DEFAULT_HTTP_PORT = 8081;
     private static final String DEFAULT_STATION_ID = "POS1";
     private static final String DEFAULT_PRINTER_PATH = "/dev/usb/lp0";
+    private static final int DEFAULT_PRINTER_PORT = 9100;
     private static final String DEFAULT_SCALE_PORT = "/dev/ttyACM0";
     private static final boolean DEFAULT_SCALE_ENABLED = true;
     private static final boolean DEFAULT_SCALE_AUTO_CONNECT = true;
@@ -23,6 +24,7 @@ public class AppConfig {
     private final int httpPort;
     private final String stationId;
     private final String printerPath;
+    private final int printerPort;
     private final String printerName;
     private final String businessName;
     private final String businessAddress;
@@ -36,6 +38,7 @@ public class AppConfig {
         this.httpPort = builder.httpPort;
         this.stationId = builder.stationId;
         this.printerPath = builder.printerPath;
+        this.printerPort = builder.printerPort;
         this.printerName = builder.printerName;
         this.businessName = builder.businessName;
         this.businessAddress = builder.businessAddress;
@@ -49,6 +52,7 @@ public class AppConfig {
     public int getHttpPort() { return httpPort; }
     public String getStationId() { return stationId; }
     public String getPrinterPath() { return printerPath; }
+    public int getPrinterPort() { return printerPort; }
     public String getPrinterName() { return printerName; }
     public String getBusinessName() { return businessName; }
     public String getBusinessAddress() { return businessAddress; }
@@ -76,6 +80,7 @@ public class AppConfig {
                 .httpPort(Integer.parseInt(resolve("HTTP_PORT", "http.port", fileConfig, String.valueOf(DEFAULT_HTTP_PORT))))
                 .stationId(resolve("STATION_ID", "station.id", fileConfig, DEFAULT_STATION_ID))
                 .printerPath(resolve("PRINTER_PATH", "printer.path", fileConfig, DEFAULT_PRINTER_PATH))
+                .printerPort(Integer.parseInt(resolve("PRINTER_PORT", "printer.port", fileConfig, String.valueOf(DEFAULT_PRINTER_PORT))))
                 .printerName(resolve("PRINTER_NAME", "printer.name", fileConfig, ""))
                 .businessName(resolve("BUSINESS_NAME", "business.name", fileConfig, "LA PASADITA"))
                 .businessAddress(resolve("BUSINESS_ADDRESS", "business.address", fileConfig, ""))
@@ -119,7 +124,9 @@ public class AppConfig {
         log("  Station ID: " + stationId);
         log("  HTTP Port: " + httpPort);
         log("  Sistema Operativo: " + (ESCPOSPrinter.isWindows() ? "Windows" : "Linux"));
-        if (ESCPOSPrinter.isWindows()) {
+        if (ESCPOSPrinter.isNetworkPrinterPath(printerPath)) {
+            log("  Impresora (Red): " + printerPath + ":" + printerPort);
+        } else if (ESCPOSPrinter.isWindows()) {
             log("  Printer Name (Windows): " + (printerName.isEmpty() ? "(no configurado)" : printerName));
         } else {
             log("  Printer Path (Linux): " + printerPath);
@@ -140,6 +147,7 @@ public class AppConfig {
         private int httpPort = DEFAULT_HTTP_PORT;
         private String stationId;
         private String printerPath;
+        private int printerPort = DEFAULT_PRINTER_PORT;
         private String printerName;
         private String businessName;
         private String businessAddress;
@@ -152,6 +160,7 @@ public class AppConfig {
         public Builder httpPort(int httpPort) { this.httpPort = httpPort; return this; }
         public Builder stationId(String stationId) { this.stationId = stationId; return this; }
         public Builder printerPath(String printerPath) { this.printerPath = printerPath; return this; }
+        public Builder printerPort(int printerPort) { this.printerPort = printerPort; return this; }
         public Builder printerName(String printerName) { this.printerName = printerName; return this; }
         public Builder businessName(String businessName) { this.businessName = businessName; return this; }
         public Builder businessAddress(String businessAddress) { this.businessAddress = businessAddress; return this; }
