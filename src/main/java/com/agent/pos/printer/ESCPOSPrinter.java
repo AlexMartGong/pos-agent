@@ -53,7 +53,7 @@ public class ESCPOSPrinter {
     private static final String SEPARATOR = "------------------------------------------";
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss");
 
-private final String businessName;
+    private final String businessName;
     private final String businessAddress;
     private final String businessPhone;
     private final String printerPath;
@@ -91,7 +91,7 @@ private final String businessName;
     }
 
     public ESCPOSPrinter() {
-        this("LA PASADITA", "", "", DEFAULT_PRINTER_PATH, null, DEFAULT_NETWORK_PORT, null);
+        this("SAAS", "Tequila, Jalisco", "000-000-0000", DEFAULT_PRINTER_PATH, null, DEFAULT_NETWORK_PORT, null);
     }
 
     public void print(TicketDTO ticket) throws PrinterException, IOException {
@@ -100,28 +100,28 @@ private final String businessName;
         byte[] commands = generateESCPOS(ticket);
 
         if (isNetworkPrinter()) {
-            printToNetworkPrinter(commands, printerPath, printerPort, "Ticket #" + ticket.getId());
+            printToNetworkPrinter(commands, printerPath, printerPort, "Ticket #" + ticket.id());
             return;
         }
 
         if (hasNetworkFallback()) {
             try {
                 if (IS_WINDOWS) {
-                    printToWindowsPrinter(commands, "Ticket #" + ticket.getId());
+                    printToWindowsPrinter(commands, "Ticket #" + ticket.id());
                 } else {
-                    printToLinuxDevice(commands, "Ticket #" + ticket.getId());
+                    printToLinuxDevice(commands, "Ticket #" + ticket.id());
                 }
             } catch (PrinterException e) {
                 System.out.println("[WARN] Impresion por cable fallo, intentando respaldo por Ethernet en " + networkIp);
-                printToNetworkPrinter(commands, networkIp, printerPort, "Ticket #" + ticket.getId());
+                printToNetworkPrinter(commands, networkIp, printerPort, "Ticket #" + ticket.id());
             }
             return;
         }
 
         if (IS_WINDOWS) {
-            printToWindowsPrinter(commands, "Ticket #" + ticket.getId());
+            printToWindowsPrinter(commands, "Ticket #" + ticket.id());
         } else {
-            printToLinuxDevice(commands, "Ticket #" + ticket.getId());
+            printToLinuxDevice(commands, "Ticket #" + ticket.id());
         }
     }
 
@@ -147,7 +147,7 @@ private final String businessName;
     }
 
     private boolean hasNetworkFallback() {
-        return networkIp != null && isNetworkPrinterPath(networkIp);
+        return isNetworkPrinterPath(networkIp);
     }
 
     private void printToNetworkPrinter(byte[] data, String ip, int port, String description) throws PrinterException {
@@ -225,8 +225,8 @@ private final String businessName;
     }
 
     private boolean isDeliveryOrder(TicketDTO ticket) {
-        return ticket.getDeliveryOrderId() != null && ticket.getDeliveryAddress() != null
-                && !ticket.getDeliveryAddress().isEmpty();
+        return ticket.deliveryOrderId() != null && ticket.deliveryAddress() != null
+                && !ticket.deliveryAddress().isEmpty();
     }
 
     public byte[] generateESCPOS(TicketDTO ticket) throws IOException {
@@ -247,14 +247,14 @@ private final String businessName;
 
         buffer.write(CHARSET_PC850);
 
-        writeHeader(buffer);
+        writeHeader(buffer, ticket);
 
         writeTicketInfoCashRegister(buffer, ticket);
 
         buffer.write(SEPARATOR.getBytes(StandardCharsets.ISO_8859_1));
         buffer.write(LINE_FEED);
 
-        writeDetails(buffer, ticket.getSaleDetails());
+        writeDetails(buffer, ticket.saleDetails());
 
         buffer.write(SEPARATOR.getBytes(StandardCharsets.ISO_8859_1));
         buffer.write(LINE_FEED);
@@ -263,8 +263,6 @@ private final String businessName;
 
         writeFooterCashRegister(buffer, ticket);
 
-        buffer.write(LINE_FEED);
-        buffer.write(LINE_FEED);
         buffer.write(LINE_FEED);
         buffer.write(CUT_PAPER_FEED);
 
@@ -278,7 +276,7 @@ private final String businessName;
 
         buffer.write(CHARSET_PC850);
 
-        writeHeader(buffer);
+        writeHeader(buffer, ticket);
 
         buffer.write(ALIGN_CENTER);
         buffer.write(BOLD_ON);
@@ -294,7 +292,7 @@ private final String businessName;
         buffer.write(SEPARATOR.getBytes(StandardCharsets.ISO_8859_1));
         buffer.write(LINE_FEED);
 
-        writeDetails(buffer, ticket.getSaleDetails());
+        writeDetails(buffer, ticket.saleDetails());
 
         buffer.write(SEPARATOR.getBytes(StandardCharsets.ISO_8859_1));
         buffer.write(LINE_FEED);
@@ -303,8 +301,6 @@ private final String businessName;
 
         writeFooterDelivery(buffer, ticket);
 
-        buffer.write(LINE_FEED);
-        buffer.write(LINE_FEED);
         buffer.write(LINE_FEED);
         buffer.write(CUT_PAPER_FEED);
 
@@ -315,27 +311,27 @@ private final String businessName;
         buffer.write(ALIGN_LEFT);
 
         buffer.write(BOLD_ON);
-        buffer.write(("TICKET #" + ticket.getId()).getBytes(StandardCharsets.ISO_8859_1));
+        buffer.write(("TICKET #" + ticket.id()).getBytes(StandardCharsets.ISO_8859_1));
         buffer.write(BOLD_OFF);
         buffer.write(LINE_FEED);
 
-        if (ticket.getDatetime() != null) {
-            buffer.write(("Fecha: " + ticket.getDatetime().format(DATE_FORMAT)).getBytes(StandardCharsets.ISO_8859_1));
+        if (ticket.datetime() != null) {
+            buffer.write(("Fecha: " + ticket.datetime().format(DATE_FORMAT)).getBytes(StandardCharsets.ISO_8859_1));
             buffer.write(LINE_FEED);
         }
 
-        if (ticket.getEmployeeName() != null) {
-            buffer.write(("Cajero: " + ticket.getEmployeeName()).getBytes(StandardCharsets.ISO_8859_1));
+        if (ticket.employeeName() != null) {
+            buffer.write(("Cajero: " + ticket.employeeName()).getBytes(StandardCharsets.ISO_8859_1));
             buffer.write(LINE_FEED);
         }
 
-        if (ticket.getCustomerName() != null && !ticket.getCustomerName().isEmpty()) {
-            buffer.write(("Cliente: " + ticket.getCustomerName()).getBytes(StandardCharsets.ISO_8859_1));
+        if (ticket.customerName() != null && !ticket.customerName().isEmpty()) {
+            buffer.write(("Cliente: " + ticket.customerName()).getBytes(StandardCharsets.ISO_8859_1));
             buffer.write(LINE_FEED);
         }
 
-        if (ticket.getPaymentMethodName() != null) {
-            buffer.write(("Pago: " + ticket.getPaymentMethodName()).getBytes(StandardCharsets.ISO_8859_1));
+        if (ticket.paymentMethodName() != null) {
+            buffer.write(("Pago: " + ticket.paymentMethodName()).getBytes(StandardCharsets.ISO_8859_1));
             buffer.write(LINE_FEED);
         }
 
@@ -343,21 +339,20 @@ private final String businessName;
     }
 
     private void writeTicketInfoDelivery(ByteArrayOutputStream buffer, TicketDTO ticket) throws IOException {
-        System.out.println("Ticket: " + ticket.toString());
         buffer.write(ALIGN_LEFT);
 
         buffer.write(BOLD_ON);
         buffer.write(DOUBLE_HEIGHT_ON);
-        buffer.write(("PEDIDO #" + ticket.getDeliveryOrderId()).getBytes(StandardCharsets.ISO_8859_1));
+        buffer.write(("PEDIDO #" + ticket.deliveryOrderId()).getBytes(StandardCharsets.ISO_8859_1));
         buffer.write(NORMAL_SIZE);
         buffer.write(BOLD_OFF);
         buffer.write(LINE_FEED);
 
-        buffer.write(("Ticket Venta: #" + ticket.getId()).getBytes(StandardCharsets.ISO_8859_1));
+        buffer.write(("Ticket Venta: #" + ticket.id()).getBytes(StandardCharsets.ISO_8859_1));
         buffer.write(LINE_FEED);
 
-        if (ticket.getDatetime() != null) {
-            buffer.write(("Fecha: " + ticket.getDatetime().format(DATE_FORMAT)).getBytes(StandardCharsets.ISO_8859_1));
+        if (ticket.datetime() != null) {
+            buffer.write(("Fecha: " + ticket.datetime().format(DATE_FORMAT)).getBytes(StandardCharsets.ISO_8859_1));
             buffer.write(LINE_FEED);
         }
 
@@ -368,38 +363,38 @@ private final String businessName;
         buffer.write(BOLD_OFF);
         buffer.write(LINE_FEED);
 
-        if (ticket.getCustomerName() != null && !ticket.getCustomerName().isEmpty()) {
-            buffer.write(("Nombre: " + ticket.getCustomerName()).getBytes(StandardCharsets.ISO_8859_1));
+        if (ticket.customerName() != null && !ticket.customerName().isEmpty()) {
+            buffer.write(("Nombre: " + ticket.customerName()).getBytes(StandardCharsets.ISO_8859_1));
             buffer.write(LINE_FEED);
         }
 
-        if (ticket.getCustomerDiscount() != null && ticket.getCustomerDiscount().compareTo(BigDecimal.ZERO) > 0) {
-            buffer.write(("Descuento Cliente: " + formatPrice(ticket.getCustomerDiscount())).getBytes(StandardCharsets.ISO_8859_1));
+        if (ticket.customerDiscount() != null && ticket.customerDiscount().compareTo(BigDecimal.ZERO) > 0) {
+            buffer.write(("Descuento Cliente: " + formatPrice(ticket.customerDiscount())).getBytes(StandardCharsets.ISO_8859_1));
             buffer.write(LINE_FEED);
         }
 
-        if (ticket.getCustomerPhone() != null && !ticket.getCustomerPhone().isEmpty()) {
-            buffer.write(("Telefono: " + ticket.getCustomerPhone()).getBytes(StandardCharsets.ISO_8859_1));
+        if (ticket.customerPhone() != null && !ticket.customerPhone().isEmpty()) {
+            buffer.write(("Telefono: " + ticket.customerPhone()).getBytes(StandardCharsets.ISO_8859_1));
             buffer.write(LINE_FEED);
         }
 
-        if (ticket.getDeliveryAddress() != null && !ticket.getDeliveryAddress().isEmpty()) {
+        if (ticket.deliveryAddress() != null && !ticket.deliveryAddress().isEmpty()) {
             buffer.write(BOLD_ON);
             buffer.write("Direccion:".getBytes(StandardCharsets.ISO_8859_1));
             buffer.write(BOLD_OFF);
             buffer.write(LINE_FEED);
-            writeWrappedText(buffer, ticket.getDeliveryAddress());
+            writeWrappedText(buffer, ticket.deliveryAddress());
         }
 
         buffer.write(LINE_FEED);
 
-        if (ticket.getEmployeeName() != null) {
-            buffer.write(("Atendio: " + ticket.getEmployeeName()).getBytes(StandardCharsets.ISO_8859_1));
+        if (ticket.employeeName() != null) {
+            buffer.write(("Atendio: " + ticket.employeeName()).getBytes(StandardCharsets.ISO_8859_1));
             buffer.write(LINE_FEED);
         }
 
-        if (ticket.getPaymentMethodName() != null) {
-            buffer.write(("Forma de Pago: " + ticket.getPaymentMethodName()).getBytes(StandardCharsets.ISO_8859_1));
+        if (ticket.paymentMethodName() != null) {
+            buffer.write(("Forma de Pago: " + ticket.paymentMethodName()).getBytes(StandardCharsets.ISO_8859_1));
             buffer.write(LINE_FEED);
         }
 
@@ -423,9 +418,9 @@ private final String businessName;
         buffer.write(ALIGN_CENTER);
         buffer.write(LINE_FEED);
 
-        if (ticket.getNotes() != null && !ticket.getNotes().isEmpty()) {
+        if (ticket.notes() != null && !ticket.notes().isEmpty()) {
             buffer.write(LINE_FEED);
-            buffer.write(("Nota: " + ticket.getNotes()).getBytes(StandardCharsets.ISO_8859_1));
+            buffer.write(("Nota: " + ticket.notes()).getBytes(StandardCharsets.ISO_8859_1));
             buffer.write(LINE_FEED);
         }
 
@@ -439,13 +434,13 @@ private final String businessName;
         buffer.write(LINE_FEED);
         buffer.write(ALIGN_CENTER);
 
-        if (ticket.getNotes() != null && !ticket.getNotes().isEmpty()) {
+        if (ticket.notes() != null && !ticket.notes().isEmpty()) {
             buffer.write(LINE_FEED);
             buffer.write(BOLD_ON);
             buffer.write("NOTAS:".getBytes(StandardCharsets.ISO_8859_1));
             buffer.write(BOLD_OFF);
             buffer.write(LINE_FEED);
-            writeWrappedText(buffer, ticket.getNotes());
+            writeWrappedText(buffer, ticket.notes());
         }
 
         buffer.write(LINE_FEED);
@@ -456,22 +451,33 @@ private final String businessName;
         buffer.write(ALIGN_LEFT);
     }
 
-    private void writeHeader(ByteArrayOutputStream buffer) throws IOException {
+    private void writeHeader(ByteArrayOutputStream buffer, TicketDTO ticket) throws IOException {
+        String name = fallback(ticket.businessName(), this.businessName);
+        String address = fallback(ticket.businessAddress(), this.businessAddress);
+        String phone = fallback(ticket.businessPhone(), this.businessPhone);
+
         buffer.write(ALIGN_CENTER);
         buffer.write(DOUBLE_SIZE_ON);
-        buffer.write(businessName.getBytes(StandardCharsets.ISO_8859_1));
+        buffer.write(name.getBytes(StandardCharsets.ISO_8859_1));
         buffer.write(LINE_FEED);
         buffer.write(NORMAL_SIZE);
 
-        if (businessAddress != null && !businessAddress.isEmpty()) {
-            buffer.write(businessAddress.getBytes(StandardCharsets.ISO_8859_1));
+        if (address != null && !address.isEmpty()) {
+            buffer.write(address.getBytes(StandardCharsets.ISO_8859_1));
             buffer.write(LINE_FEED);
         }
-        if (businessPhone != null && !businessPhone.isEmpty()) {
-            buffer.write(("WhatsApp: " + businessPhone).getBytes(StandardCharsets.ISO_8859_1));
+        if (phone != null && !phone.isEmpty()) {
+            buffer.write(("WhatsApp: " + phone).getBytes(StandardCharsets.ISO_8859_1));
             buffer.write(LINE_FEED);
         }
         buffer.write(LINE_FEED);
+    }
+
+    private String fallback(String ticketValue, String classValue) {
+        if (ticketValue != null && !ticketValue.isEmpty()) {
+            return ticketValue;
+        }
+        return classValue;
     }
 
     private void writeDetails(ByteArrayOutputStream buffer, List<SaleDetailDTO> details) throws IOException {
@@ -489,10 +495,10 @@ private final String businessName;
         buffer.write(LINE_FEED);
 
         for (SaleDetailDTO detail : details) {
-            String productName = detail.getProductName() != null ? detail.getProductName() : "";
-            String qty = formatQuantity(detail.getQuantity());
-            String unitPrice = formatPrice(detail.getUnitPrice());
-            String total = formatPrice(detail.getSubtotal());
+            String productName = detail.productName() != null ? detail.productName() : "";
+            String qty = formatQuantity(detail.quantity());
+            String unitPrice = formatPrice(detail.unitPrice());
+            String total = formatPrice(detail.subtotal());
 
             if (productName.length() <= 18) {
                 buffer.write(formatDetailLine(qty, productName, unitPrice, total).getBytes(StandardCharsets.ISO_8859_1));
@@ -542,28 +548,28 @@ private final String businessName;
     private void writeTotals(ByteArrayOutputStream buffer, TicketDTO ticket) throws IOException {
         buffer.write(ALIGN_RIGHT);
 
-        buffer.write(("Subtotal: $" + formatPrice(ticket.getSubtotal())).getBytes(StandardCharsets.ISO_8859_1));
+        buffer.write(("Subtotal: $" + formatPrice(ticket.subtotal())).getBytes(StandardCharsets.ISO_8859_1));
         buffer.write(LINE_FEED);
 
-        if (ticket.getDiscountAmount() != null && ticket.getDiscountAmount().compareTo(BigDecimal.ZERO) > 0) {
-            buffer.write(("Descuento: -$" + formatPrice(ticket.getDiscountAmount())).getBytes(StandardCharsets.ISO_8859_1));
+        if (ticket.discountAmount() != null && ticket.discountAmount().compareTo(BigDecimal.ZERO) > 0) {
+            buffer.write(("Descuento: -$" + formatPrice(ticket.discountAmount())).getBytes(StandardCharsets.ISO_8859_1));
             buffer.write(LINE_FEED);
         }
 
         buffer.write(BOLD_ON);
         buffer.write(DOUBLE_HEIGHT_ON);
-        buffer.write(("TOTAL: $" + formatPrice(ticket.getTotal())).getBytes(StandardCharsets.ISO_8859_1));
+        buffer.write(("TOTAL: $" + formatPrice(ticket.total())).getBytes(StandardCharsets.ISO_8859_1));
         buffer.write(NORMAL_SIZE);
         buffer.write(BOLD_OFF);
         buffer.write(LINE_FEED);
 
-        if (ticket.getAmountTendered() != null && ticket.getAmountTendered().compareTo(BigDecimal.ZERO) > 0) {
-            buffer.write(("Recibido: $" + formatPrice(ticket.getAmountTendered())).getBytes(StandardCharsets.ISO_8859_1));
+        if (ticket.amountTendered() != null && ticket.amountTendered().compareTo(BigDecimal.ZERO) > 0) {
+            buffer.write(("Recibido: $" + formatPrice(ticket.amountTendered())).getBytes(StandardCharsets.ISO_8859_1));
             buffer.write(LINE_FEED);
         }
 
-        if (ticket.getChangeDue() != null && ticket.getChangeDue().compareTo(BigDecimal.ZERO) > 0) {
-            buffer.write(("Cambio: $" + formatPrice(ticket.getChangeDue())).getBytes(StandardCharsets.ISO_8859_1));
+        if (ticket.changeDue() != null && ticket.changeDue().compareTo(BigDecimal.ZERO) > 0) {
+            buffer.write(("Cambio: $" + formatPrice(ticket.changeDue())).getBytes(StandardCharsets.ISO_8859_1));
             buffer.write(LINE_FEED);
         }
 
@@ -703,10 +709,6 @@ private final String businessName;
 
     public static boolean isWindows() {
         return IS_WINDOWS;
-    }
-
-    public int getPrinterPort() {
-        return printerPort;
     }
 
     public static class PrinterException extends Exception {

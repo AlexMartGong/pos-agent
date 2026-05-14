@@ -24,7 +24,7 @@ public class PrintMessageHandler {
 
         try {
             TicketDTO ticket = objectMapper.readValue(message, TicketDTO.class);
-            log("INFO", "Ticket #" + ticket.getId() + " parseado - Cliente: " + ticket.getCustomerName());
+            log("INFO", "Ticket #" + ticket.id() + " parseado - Cliente: " + ticket.customerName());
 
             return printTicket(ticket);
 
@@ -45,10 +45,10 @@ public class PrintMessageHandler {
 
         try {
             if (printer.isAvailable()) {
-                log("INFO", "Imprimiendo ticket #" + ticket.getId() + "...");
+                log("INFO", "Imprimiendo ticket #" + ticket.id() + "...");
                 printer.print(ticket);
                 success = true;
-                log("INFO", "Ticket #" + ticket.getId() + " impreso correctamente");
+                log("INFO", "Ticket #" + ticket.id() + " impreso correctamente");
             } else {
                 errorMessage = "Impresora no disponible o desconectada";
                 log("ERROR", errorMessage);
@@ -65,7 +65,7 @@ public class PrintMessageHandler {
             e.fillInStackTrace();
         }
 
-        return new PrintResult(ticket.getId(), success, errorMessage);
+        return new PrintResult(ticket.id(), success, errorMessage);
     }
 
     private static void log(String level, String message) {
