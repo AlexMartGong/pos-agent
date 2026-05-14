@@ -49,8 +49,8 @@ public class ESCPOSPrinter {
     private static final byte[] CHARSET_PC850 = {0x1B, 0x74, 0x02};
     private static final byte[] OPEN_DRAWER = {0x1B, 0x70, 0x00, 0x19, (byte) 0xFA};
 
-    private static final int TICKET_WIDTH = 42;
-    private static final String SEPARATOR = "------------------------------------------";
+    private static final int TICKET_WIDTH = 48;
+    private static final String SEPARATOR = "------------------------------------------------";
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss");
 
     private final String businessName;
@@ -359,7 +359,7 @@ public class ESCPOSPrinter {
         buffer.write(LINE_FEED);
 
         buffer.write(BOLD_ON);
-        buffer.write("-------- DATOS DEL CLIENTE ---------------".getBytes(StandardCharsets.ISO_8859_1));
+        buffer.write("-------- DATOS DEL CLIENTE --------------------".getBytes(StandardCharsets.ISO_8859_1));
         buffer.write(BOLD_OFF);
         buffer.write(LINE_FEED);
 
@@ -500,7 +500,7 @@ public class ESCPOSPrinter {
             String unitPrice = formatPrice(detail.unitPrice());
             String total = formatPrice(detail.subtotal());
 
-            if (productName.length() <= 18) {
+            if (productName.length() <= 24) {
                 buffer.write(formatDetailLine(qty, productName, unitPrice, total).getBytes(StandardCharsets.ISO_8859_1));
                 buffer.write(LINE_FEED);
             } else {
@@ -527,11 +527,11 @@ public class ESCPOSPrinter {
 
         String remaining = name.trim();
 
-        while (remaining.length() > 18) {
-            int splitPos = remaining.lastIndexOf(' ', 18);
+        while (remaining.length() > 24) {
+            int splitPos = remaining.lastIndexOf(' ', 24);
 
             if (splitPos <= 0) {
-                splitPos = 18;
+                splitPos = 24;
             }
 
             lines.add(remaining.substring(0, splitPos).trim());
@@ -578,7 +578,7 @@ public class ESCPOSPrinter {
 
     private String formatDetailLine(String cant, String producto, String precio, String total) {
         int cantWidth = 5;
-        int productoWidth = 18;
+        int productoWidth = 24;
         int precioWidth = 8;
         int totalWidth = 8;
 
