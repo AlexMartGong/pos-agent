@@ -59,15 +59,22 @@ private final String businessName;
     private final String printerPath;
     private final String printerName;
     private final int printerPort;
+    private final String networkIp;
 
     public ESCPOSPrinter(String businessName, String businessAddress, String businessPhone,
-                          String printerPath, String printerName, int printerPort) {
+                          String printerPath, String printerName, int printerPort, String networkIp) {
         this.businessName = businessName;
         this.businessAddress = businessAddress;
         this.businessPhone = businessPhone;
         this.printerPath = printerPath != null ? printerPath : DEFAULT_PRINTER_PATH;
         this.printerName = printerName;
         this.printerPort = printerPort > 0 ? printerPort : DEFAULT_NETWORK_PORT;
+        this.networkIp = (networkIp != null && !networkIp.isEmpty()) ? networkIp : null;
+    }
+
+    public ESCPOSPrinter(String businessName, String businessAddress, String businessPhone,
+                          String printerPath, String printerName, int printerPort) {
+        this(businessName, businessAddress, businessPhone, printerPath, printerName, printerPort, null);
     }
 
     public ESCPOSPrinter(String businessName, String businessAddress, String businessPhone,
@@ -76,15 +83,15 @@ private final String businessName;
     }
 
     public ESCPOSPrinter(String businessName, String businessAddress, String businessPhone, String printerPath) {
-        this(businessName, businessAddress, businessPhone, printerPath, null, DEFAULT_NETWORK_PORT);
+        this(businessName, businessAddress, businessPhone, printerPath, null, DEFAULT_NETWORK_PORT, null);
     }
 
     public ESCPOSPrinter(String businessName, String businessAddress, String businessPhone) {
-        this(businessName, businessAddress, businessPhone, DEFAULT_PRINTER_PATH, null, DEFAULT_NETWORK_PORT);
+        this(businessName, businessAddress, businessPhone, DEFAULT_PRINTER_PATH, null, DEFAULT_NETWORK_PORT, null);
     }
 
     public ESCPOSPrinter() {
-        this("LA PASADITA", "", "", DEFAULT_PRINTER_PATH, null, DEFAULT_NETWORK_PORT);
+        this("LA PASADITA", "", "", DEFAULT_PRINTER_PATH, null, DEFAULT_NETWORK_PORT, null);
     }
 
     public void print(TicketDTO ticket) throws PrinterException, IOException {
@@ -94,7 +101,24 @@ private final String businessName;
 
         if (isNetworkPrinter()) {
             printToNetworkPrinter(commands, printerPath, printerPort, "Ticket #" + ticket.getId());
-        } else if (IS_WINDOWS) {
+            return;
+        }
+
+        if (hasNetworkFallback()) {
+            try {
+                if (IS_WINDOWS) {
+                    printToWindowsPrinter(commands, "Ticket #" + ticket.getId());
+                } else {
+                    printToLinuxDevice(commands, "Ticket #" + ticket.getId());
+                }
+            } catch (PrinterException e) {
+                System.out.println("[WARN] Impresion por cable fallo, intentando respaldo por Ethernet en " + networkIp);
+                printToNetworkPrinter(commands, networkIp, printerPort, "Ticket #" + ticket.getId());
+            }
+            return;
+        }
+
+        if (IS_WINDOWS) {
             printToWindowsPrinter(commands, "Ticket #" + ticket.getId());
         } else {
             printToLinuxDevice(commands, "Ticket #" + ticket.getId());
@@ -120,6 +144,10 @@ private final String businessName;
 
     public static boolean isNetworkPrinterPath(String path) {
         return path != null && IPv4_PATTERN.matcher(path).matches();
+    }
+
+    private boolean hasNetworkFallback() {
+        return networkIp != null && isNetworkPrinterPath(networkIp);
     }
 
     private void printToNetworkPrinter(byte[] data, String ip, int port, String description) throws PrinterException {
@@ -627,6 +655,17 @@ private final String businessName;
 
         if (isNetworkPrinter()) {
             printToNetworkPrinter(buffer.toByteArray(), printerPath, printerPort, "Pagina de prueba");
+        } else if (hasNetworkFallback()) {
+            try {
+                if (IS_WINDOWS) {
+                    printToWindowsPrinter(buffer.toByteArray(), "Pagina de prueba");
+                } else {
+                    printToLinuxDevice(buffer.toByteArray(), "Pagina de prueba");
+                }
+            } catch (PrinterException e) {
+                System.out.println("[WARN] Impresion por cable fallo, intentando respaldo por Ethernet en " + networkIp);
+                printToNetworkPrinter(buffer.toByteArray(), networkIp, printerPort, "Pagina de prueba");
+            }
         } else if (IS_WINDOWS) {
             printToWindowsPrinter(buffer.toByteArray(), "Pagina de prueba");
         } else {
@@ -638,6 +677,17 @@ private final String businessName;
         if (isNetworkPrinter()) {
             try (Socket socket = new Socket()) {
                 socket.connect(new InetSocketAddress(printerPath, printerPort), AVAILABILITY_TIMEOUT_MS);
+                return true;
+            } catch (IOException e) {
+                return false;
+            }
+        } else if (hasNetworkFallback()) {
+            boolean cableAvailable = IS_WINDOWS
+                    ? getEffectivePrinterName() != null && findPrintService(getEffectivePrinterName()) != null
+                    : new File(printerPath).exists() && new File(printerPath).canWrite();
+            if (cableAvailable) return true;
+            try (Socket socket = new Socket()) {
+                socket.connect(new InetSocketAddress(networkIp, printerPort), AVAILABILITY_TIMEOUT_MS);
                 return true;
             } catch (IOException e) {
                 return false;
