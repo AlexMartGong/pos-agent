@@ -25,7 +25,7 @@ Endpoints (all with CORS `Access-Control-Allow-Origin: *`):
 - `GET /api/health` → `HealthHandler`
 - `/api/scale/*` and `/api/station` → `ScaleRestServer`
 
-Package layout by domain (not flat): `com.agent.pos.config`, `.printer`, `.scale`, `.dto`. Main class in root `com.agent.pos`.
+Package layout by domain (not flat): `com.agent.pos.config`, `.printer`, `.scale`, `.dto`, `.network`. Main class in root `com.agent.pos`.
 
 ## Dependencies Whitelist
 
@@ -33,7 +33,7 @@ Package layout by domain (not flat): `com.agent.pos.config`, `.printer`, `.scale
 
 ## Configuration Precedence
 
-Environment Variables > `config.properties` file > Hardcoded defaults. Key env vars: `HTTP_PORT`, `PRINTER_PATH`, `PRINTER_NETWORK_IP`, `PRINTER_PORT`, `SCALE_PORT`, `SCALE_ENABLED`, `STATION_ID`.
+Environment Variables > `config.properties` file > Hardcoded defaults. Key env vars: `HTTP_PORT`, `PRINTER_PATH`, `PRINTER_NETWORK_IP`, `PRINTER_PORT`, `SCALE_PORT`, `SCALE_ENABLED`, `STATION_ID`, `SAAS_API_URL`, `AGENT_API_KEY`.
 
 ## Print Endpoint Contract
 
@@ -69,3 +69,14 @@ Environment Variables > `config.properties` file > Hardcoded defaults. Key env v
 ## Network Binding
 
 Server binds to `0.0.0.0` (not localhost) — required for LAN access from mobile devices running the React frontend.
+
+## Heartbeat (Self-Discovery)
+
+`HeartbeatTask` (`com.agent.pos.network`) reports the agent's IP to the SaaS backend every 5 minutes so the frontend can discover the agent dynamically.
+
+- **Endpoint:** `PUT {SAAS_API_URL}/agent/stores/{STATION_ID}/url`
+- **Payload:** `{"url":"http://{localIp}:{httpPort}"}`
+- **Header:** `X-Agent-Key: {AGENT_API_KEY}`
+- **IP Resolution:** Uses `DatagramSocket` connected to `8.8.8.8:10002` to force the OS routing table to resolve the real LAN IP (avoids `127.0.1.1` from `/etc/hosts` on Linux). Falls back to `InetAddress.getLocalHost().getHostAddress()` if no network is available.
+- **Behaviour:** Runs immediately on startup then every 5 min via `ScheduledExecutorService` (daemon thread). If `STATION_ID` is blank/null, heartbeat is disabled with a WARN log. All failures are caught and logged — never crashes the agent.
+- **Config:** `SAAS_API_URL` (default `http://localhost:8080/api/v1`), `AGENT_API_KEY` (default `default-agent-secret`), `STATION_ID` (default empty = disabled).

@@ -12,13 +12,15 @@ import java.util.Properties;
 public class AppConfig {
 
     private static final int DEFAULT_HTTP_PORT = 8081;
-    private static final String DEFAULT_STATION_ID = "POS1";
+    private static final String DEFAULT_STATION_ID = "";
     private static final String DEFAULT_PRINTER_PATH = "/dev/usb/lp0";
     private static final int DEFAULT_PRINTER_PORT = 9100;
     private static final String DEFAULT_SCALE_PORT = "/dev/ttyACM0";
     private static final boolean DEFAULT_SCALE_ENABLED = true;
     private static final boolean DEFAULT_SCALE_AUTO_CONNECT = true;
     private static final String DEFAULT_PRINTER_NETWORK_IP = "";
+    private static final String DEFAULT_SAAS_API_URL = "http://localhost:8080/api/v1";
+    private static final String DEFAULT_AGENT_API_KEY = "default-agent-secret";
 
     private static final DateTimeFormatter LOG_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
@@ -35,6 +37,8 @@ public class AppConfig {
     private final boolean scaleEnabled;
     private final boolean scaleAutoConnect;
     private final boolean testMode;
+    private final String saasApiUrl;
+    private final String agentApiKey;
 
     private AppConfig(Builder builder) {
         this.httpPort = builder.httpPort;
@@ -50,6 +54,8 @@ public class AppConfig {
         this.scaleEnabled = builder.scaleEnabled;
         this.scaleAutoConnect = builder.scaleAutoConnect;
         this.testMode = builder.testMode;
+        this.saasApiUrl = builder.saasApiUrl;
+        this.agentApiKey = builder.agentApiKey;
     }
 
     public int getHttpPort() { return httpPort; }
@@ -65,6 +71,8 @@ public class AppConfig {
     public boolean isScaleEnabled() { return scaleEnabled; }
     public boolean isScaleAutoConnect() { return scaleAutoConnect; }
     public boolean isTestMode() { return testMode; }
+    public String getSaasApiUrl() { return saasApiUrl; }
+    public String getAgentApiKey() { return agentApiKey; }
 
     public static AppConfig load(String[] args) {
         boolean testMode = false;
@@ -94,6 +102,8 @@ public class AppConfig {
                 .scaleEnabled(Boolean.parseBoolean(resolve("SCALE_ENABLED", "scale.enabled", fileConfig, String.valueOf(DEFAULT_SCALE_ENABLED))))
                 .scaleAutoConnect(Boolean.parseBoolean(resolve("SCALE_AUTO_CONNECT", "scale.autoConnect", fileConfig, String.valueOf(DEFAULT_SCALE_AUTO_CONNECT))))
                 .testMode(testMode)
+                .saasApiUrl(resolve("SAAS_API_URL", "saas.api.url", fileConfig, DEFAULT_SAAS_API_URL))
+                .agentApiKey(resolve("AGENT_API_KEY", "agent.api.key", fileConfig, DEFAULT_AGENT_API_KEY))
                 .build();
     }
 
@@ -143,6 +153,9 @@ public class AppConfig {
         log("  Scale Port: " + scalePort);
         log("  Scale Enabled: " + scaleEnabled);
         log("  Scale Auto-Connect: " + scaleAutoConnect);
+        log("  SaaS API URL: " + saasApiUrl);
+        log("  Agent API Key: " + (agentApiKey.isEmpty() ? "(no configurado)" : "********"));
+        log("  Heartbeat: " + (stationId == null || stationId.isBlank() ? "deshabilitado (STATION_ID vacio)" : "habilitado"));
         log("============================================");
     }
 
@@ -165,6 +178,8 @@ public class AppConfig {
         private boolean scaleEnabled;
         private boolean scaleAutoConnect;
         private boolean testMode;
+        private String saasApiUrl = DEFAULT_SAAS_API_URL;
+        private String agentApiKey = DEFAULT_AGENT_API_KEY;
 
         public Builder httpPort(int httpPort) { this.httpPort = httpPort; return this; }
         public Builder stationId(String stationId) { this.stationId = stationId; return this; }
@@ -179,6 +194,8 @@ public class AppConfig {
         public Builder scaleEnabled(boolean scaleEnabled) { this.scaleEnabled = scaleEnabled; return this; }
         public Builder scaleAutoConnect(boolean scaleAutoConnect) { this.scaleAutoConnect = scaleAutoConnect; return this; }
         public Builder testMode(boolean testMode) { this.testMode = testMode; return this; }
+        public Builder saasApiUrl(String saasApiUrl) { this.saasApiUrl = saasApiUrl; return this; }
+        public Builder agentApiKey(String agentApiKey) { this.agentApiKey = agentApiKey; return this; }
 
         public AppConfig build() {
             return new AppConfig(this);

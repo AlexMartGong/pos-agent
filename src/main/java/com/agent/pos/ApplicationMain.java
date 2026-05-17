@@ -1,6 +1,7 @@
 package com.agent.pos;
 
 import com.agent.pos.config.AppConfig;
+import com.agent.pos.network.HeartbeatTask;
 import com.agent.pos.printer.ESCPOSPrinter;
 import com.agent.pos.printer.PrintHandler;
 import com.agent.pos.printer.PrintMessageHandler;
@@ -14,6 +15,8 @@ import java.net.InetSocketAddress;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 public class ApplicationMain {
 
@@ -75,8 +78,28 @@ public class ApplicationMain {
         log("INFO", "  GET  /api/scale/ports       - Puertos serie disponibles");
         log("INFO", "  GET  /api/station           - ID de estación");
 
+        ScheduledExecutorService heartbeatScheduler = null;
+        String stationId = config.getStationId();
+        if (stationId == null || stationId.isBlank()) {
+            log("WARN", "STATION_ID no configurado. Auto-descubrimiento deshabilitado.");
+        } else {
+            heartbeatScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread t = new Thread(r, "heartbeat");
+                t.setDaemon(true);
+                return t;
+            });
+            HeartbeatTask heartbeatTask = new HeartbeatTask(
+                    config.getSaasApiUrl(), stationId, config.getAgentApiKey(), config.getHttpPort());
+            heartbeatScheduler.scheduleAtFixedRate(heartbeatTask, 0, 5, TimeUnit.MINUTES);
+            log("INFO", "Heartbeat programado cada 5 min hacia " + config.getSaasApiUrl());
+        }
+
+        ScheduledExecutorService finalHeartbeatScheduler = heartbeatScheduler;
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             log("INFO", "Señal de cierre recibida");
+            if (finalHeartbeatScheduler != null) {
+                finalHeartbeatScheduler.shutdownNow();
+            }
             server.stop(2);
             scaleServer.stop();
             log("INFO", "Agente detenido correctamente");
