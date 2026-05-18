@@ -68,8 +68,8 @@ logs/
 # ----------------
 # NOTA: config.properties contiene configuración específica de cada máquina
 # como rutas de impresora, URLs del servidor, etc.
-# Descomenta la siguiente línea si no quieres incluirlo en el repo:
-# config.properties
+# Descomenta la siguiente lnea si no quieres incluirlo en el repo:
+config.properties
 
 # ----------------
 # Dependencias descargadas
