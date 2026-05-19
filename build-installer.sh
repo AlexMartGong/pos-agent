@@ -7,7 +7,7 @@
 
 set -e
 
-echo "=== POS Printer Agent - Build Installer ==="
+echo "=== POS Agent - Build Installer ==="
 echo ""
 
 # Verificar JAVA_HOME
@@ -28,7 +28,7 @@ mvn clean package -DskipTests -q
 echo "[2/3] Preparando archivos..."
 rm -rf target/installer
 mkdir -p target/installer/input
-cp target/pos-printer-agent.jar target/installer/input/
+cp target/pos-agent.jar target/installer/input/
 cp config.properties target/installer/input/
 
 echo "[3/3] Generando instalador..."
@@ -45,9 +45,9 @@ fi
 
 "$JAVA_HOME/bin/jpackage" \
     --input "target/installer/input" \
-    --name "pos-printer-agent" \
-    --main-jar pos-printer-agent.jar \
-    --main-class com.pasadita.pos.POSPrinterAgent \
+    --name "pos-agent" \
+    --main-jar pos-agent.jar \
+    --main-class com.agent.pos.ApplicationMain \
     --type "$INSTALLER_TYPE" \
     --dest "target/installer" \
     --app-version "1.0.0" \

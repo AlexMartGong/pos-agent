@@ -3,7 +3,7 @@
   <name>POS Printer Agent</name>
   <description>Agente de impresion para terminales POS - La Pasadita</description>
   <executable>java</executable>
-  <arguments>-Xmx256m -jar "%BASE%\pos-printer-agent.jar"</arguments>
+  <arguments>-Xmx256m -jar "%BASE%\pos-agent.jar"</arguments>
   <workingdirectory>%BASE%</workingdirectory>
 
   <!-- Logging -->
