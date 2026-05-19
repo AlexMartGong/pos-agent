@@ -42,7 +42,7 @@ public class HeartbeatTask implements Runnable {
             String agentUrl = "http://" + localIp + ":" + httpPort;
             String jsonPayload = "{\"url\":\"" + agentUrl + "\"}";
 
-            String targetUrl = saasApiUrl + "/agent/stores/" + stationId + "/url";
+            String targetUrl = saasApiUrl + "/agent/stations/" + stationId + "/url";
 
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(targetUrl))

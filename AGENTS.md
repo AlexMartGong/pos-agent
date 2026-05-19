@@ -74,7 +74,7 @@ Server binds to `0.0.0.0` (not localhost) — required for LAN access from mobil
 
 `HeartbeatTask` (`com.agent.pos.network`) reports the agent's IP to the SaaS backend every 5 minutes so the frontend can discover the agent dynamically.
 
-- **Endpoint:** `PUT {SAAS_API_URL}/agent/stores/{STATION_ID}/url`
+- **Endpoint:** `PUT {SAAS_API_URL}/agent/stations/{STATION_ID}/url`
 - **Payload:** `{"url":"http://{localIp}:{httpPort}"}`
 - **Header:** `X-Agent-Key: {AGENT_API_KEY}`
 - **IP Resolution:** Uses `DatagramSocket` connected to `8.8.8.8:10002` to force the OS routing table to resolve the real LAN IP (avoids `127.0.1.1` from `/etc/hosts` on Linux). Falls back to `InetAddress.getLocalHost().getHostAddress()` if no network is available.
