@@ -27,7 +27,7 @@ public class PrintHandler implements HttpHandler {
     }
 
     @Override
-    public void handle(HttpExchange exchange) throws IOException {
+    public void handle(HttpExchange exchange) {
         try {
             if (CorsUtils.handlePreflightIfOptions(exchange)) {
                 return;
@@ -62,7 +62,7 @@ public class PrintHandler implements HttpHandler {
             logger.error("Error inesperado en PrintHandler: {}", e.getMessage(), e);
             try {
                 Map<String, Object> response = new LinkedHashMap<>();
-                response.put("ticketId", -1);
+                response.put("ticketId", "-1");
                 response.put("success", false);
                 response.put("error", "Error interno del servidor");
                 sendJson(exchange, 200, response);
@@ -83,7 +83,7 @@ public class PrintHandler implements HttpHandler {
 
     private Map<String, Object> errorBody(String message) {
         Map<String, Object> map = new LinkedHashMap<>();
-        map.put("ticketId", (long) -1);
+        map.put("ticketId", "-1");
         map.put("success", false);
         map.put("error", message);
         return map;

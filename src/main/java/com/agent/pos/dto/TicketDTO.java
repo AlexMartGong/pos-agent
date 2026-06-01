@@ -8,7 +8,7 @@ import java.util.List;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record TicketDTO(
-        Long id,
+        String id,
         Long employeeId,
         String employeeName,
         String employeePhone,

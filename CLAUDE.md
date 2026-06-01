@@ -11,13 +11,15 @@ Senior Java developer for hardware integration on POS systems: HTTP/REST, Serial
 ## Build & Run
 
 ```bash
-mvn clean package                                  # Fat JAR → target/pos-agent.jar
+mvn clean package                                  # Fat JAR → target/pos-agent.jar (./mvnw also works)
 java -jar target/pos-agent.jar                     # Run agent
 java -jar target/pos-agent.jar --test              # Print test page, then exit (-t also works)
 java -jar target/pos-agent.jar /path/to/config.properties
 ./build-installer.sh                               # Linux .deb via jpackage (JDK 14+)
+build-installer.bat                                # Windows installer (jpackage); build-service-package.sh/.bat = WinSW bundle
 ```
 
+Requires **Java 17** (pom `maven.compiler.target=17`). `HttpClient`/`HttpServer` are native Java 11+.
 Main class: `com.agent.pos.ApplicationMain`. JAR finalName `pos-agent` (no assembly id).
 **No automated tests exist.** `mvn test` verifies nothing. Validate changes by running the jar.
 
@@ -52,7 +54,7 @@ Endpoints (all CORS-wrapped via `CorsUtils`):
    - **Cash register** (`deliveryOrderId == null`): open drawer `0x1B 0x70 0x00 0x19 0xFA`, print header/details/totals, cut + feed `0x1D 0x56 0x42 0x03`.
    - **Delivery** (`deliveryOrderId != null && deliveryAddress != null && !deliveryAddress.isEmpty()`): **no drawer**, `PEDIDO A DOMICILIO` header, customer block (name/phone/discount/address), `Atendio` + `Forma de Pago` fields, `PEDIDO #`.
 
-4. **Configuration precedence:** Env vars > `config.properties` > hardcoded defaults. Loaded by `AppConfig.load(args)`. Key env vars: `HTTP_PORT`, `STATION_ID`, `PRINTER_PATH`, `PRINTER_NETWORK_IP`, `PRINTER_PORT`, `SCALE_PORT`, `SCALE_ENABLED`, `SCALE_AUTO_CONNECT`, `SAAS_API_URL`, `AGENT_API_KEY`, `BUSINESS_NAME`/`BUSINESS_ADDRESS`/`BUSINESS_PHONE`.
+4. **Configuration precedence:** Env vars > `config.properties` > hardcoded defaults. Loaded by `AppConfig.load(args)`. Key env vars: `HTTP_PORT`, `STATION_ID`, `PRINTER_PATH`, `PRINTER_NAME` (prop `printer.name`, Windows `javax.print` target), `PRINTER_NETWORK_IP`, `PRINTER_PORT`, `SCALE_PORT`, `SCALE_ENABLED`, `SCALE_AUTO_CONNECT`, `SAAS_API_URL`, `AGENT_API_KEY`, `BUSINESS_NAME`/`BUSINESS_ADDRESS`/`BUSINESS_PHONE`.
 
 5. **Printer transport & fallback:**
    - If `printerPath` matches IPv4 regex (each octet 0–255) → direct network mode via `java.net.Socket` to `path:printerPort` (5s connect, 2s for `isAvailable()`).
@@ -60,7 +62,7 @@ Endpoints (all CORS-wrapped via `CorsUtils`):
    - If `printerNetworkIp` is set AND `printerPath` is not an IP: cable is tried first; on `PrinterException`, agent logs `[WARN]` and retries via Ethernet at `networkIp:printerPort`. Applies to both `print()` and `printTestPage()`. `isAvailable()` returns true if either path is reachable.
    - When `printerPath` is already an IPv4, no fallback (already on Ethernet).
 
-6. **Print endpoint contract:** `POST /api/printer/print` **always returns HTTP 200** with `{ticketId, success, error?}`. Empty body → `{ticketId:-1, success:false, error:"Body vacio"}`. Unhandled exception → `{ticketId:-1, success:false, error:"Error interno del servidor"}`. Only non-POST gets 405; OPTIONS gets 204.
+6. **Print endpoint contract:** `POST /api/printer/print` **always returns HTTP 200** with `{ticketId, success, error?}`. `id` is the sale folio: an 8-char hex String (e.g. `"5155558B"`), echoed back as `ticketId`. Empty body → `{ticketId:"-1", success:false, error:"Body vacio"}`. Unhandled exception → `{ticketId:"-1", success:false, error:"Error interno del servidor"}`. Only non-POST gets 405; OPTIONS gets 204.
 
 7. **CORS (every endpoint):** `Access-Control-Allow-Origin: *`, `Allow-Methods: GET, POST, OPTIONS`, `Allow-Headers: Content-Type, Authorization, Accept, Origin`. OPTIONS preflight → 204 with `Max-Age: 86400`.
 
@@ -75,6 +77,10 @@ Endpoints (all CORS-wrapped via `CorsUtils`):
 10. **Cross-platform:** Linux/Ubuntu (raw `/dev/usb/lp*`, `/dev/ttyACM*`), Windows (`javax.print` or WinSW service via `service/`), Ethernet (`java.net.Socket` to port 9100 or custom `printerPort`).
 
 11. **Test mode:** `--test`/`-t` constructs `ESCPOSPrinter`, calls `printTestPage()` (opens drawer, prints `PRINT TEST` + OS/printer-path info, cuts with feed), then exits.
+
+## Sibling docs
+
+- **`AGENTS.md`** — near-duplicate of this file (same architecture, endpoint contract, ESC/POS rules) for non-Claude agents. When you change architecture/contract here, mirror it there (and vice versa) so they don't drift.
 
 ## Stale files — do NOT trust
 

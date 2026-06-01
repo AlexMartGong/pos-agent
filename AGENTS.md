@@ -37,9 +37,9 @@ Environment Variables > `config.properties` file > Hardcoded defaults. Key env v
 
 ## Print Endpoint Contract
 
-`POST /api/printer/print` **always returns HTTP 200** regardless of success or failure. Errors are in the JSON body:
-- Empty body → `200 {ticketId: -1, success: false, error: "Body vacio"}`
-- Unhandled exception → `200 {ticketId: -1, success: false, error: "Error interno del servidor"}`
+`POST /api/printer/print` **always returns HTTP 200** regardless of success or failure. `ticketId` echoes the sale folio: an 8-char hex String (e.g. `"5155558B"`). Errors are in the JSON body:
+- Empty body → `200 {ticketId: "-1", success: false, error: "Body vacio"}`
+- Unhandled exception → `200 {ticketId: "-1", success: false, error: "Error interno del servidor"}`
 - Only non-POST methods get 405; OPTIONS gets 204.
 
 ## ESC/POS Formatting — MUST GET RIGHT

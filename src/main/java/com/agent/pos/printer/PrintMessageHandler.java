@@ -31,11 +31,11 @@ public class PrintMessageHandler {
         } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
             log("ERROR", "Error parseando JSON: " + e.getMessage());
             log("DEBUG", "Mensaje recibido: " + message.substring(0, Math.min(200, message.length())));
-            return new PrintResult(-1, false, "Error parseando JSON: " + e.getMessage());
+            return new PrintResult("-1", false, "Error parseando JSON: " + e.getMessage());
         } catch (Exception e) {
             log("ERROR", "Error procesando mensaje: " + e.getMessage());
             e.fillInStackTrace();
-            return new PrintResult(-1, false, "Error procesando mensaje: " + e.getMessage());
+            return new PrintResult("-1", false, "Error procesando mensaje: " + e.getMessage());
         }
     }
 
