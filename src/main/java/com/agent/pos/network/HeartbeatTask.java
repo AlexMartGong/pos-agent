@@ -39,6 +39,7 @@ public class HeartbeatTask implements Runnable {
         this.httpPort = httpPort;
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(5))
+                .followRedirects(HttpClient.Redirect.NORMAL)
                 .build();
     }
 
