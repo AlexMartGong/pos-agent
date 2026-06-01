@@ -129,7 +129,21 @@ If `station.id` is blank, heartbeat is disabled and a WARN is logged at startup.
 ## Packaging / service
 
 - **Linux .deb installer:** `./build-installer.sh` (uses `jpackage`, requires `JAVA_HOME` and JDK 14+).
-- **Windows service:** WinSW descriptor in `service/pos-printer-agent.xml` plus `service/install-service.bat` / `uninstall-service.bat`.
+- **Windows service:** WinSW descriptor in `service/pos-printer-agent.xml` plus `service/install-service.bat` / `uninstall-service.bat`. The WinSW `<executable>` is the `run-agent.bat` wrapper that applies a pending `pos-agent-next.jar` before launching the JVM.
+
+## Releases (CI/CD)
+
+`.github/workflows/release.yml` builds and publishes the agent automatically. Push a tag to cut a release:
+
+```
+git tag v1.0.0 && git push origin v1.0.0
+```
+
+On any `v*` tag the workflow: builds with `./mvnw clean package -DskipTests`, computes `sha256sum target/pos-agent.jar` → `target/sha256.txt`, and publishes a GitHub Release (`softprops/action-gh-release@v2`) with assets **`pos-agent.jar`** and **`sha256.txt`** (the SHA-256 in the release body too).
+
+This is the producer side of the silent self-update loop: the SaaS serves the jar asset URL as `downloadUrl` and the `sha256.txt` contents as `sha256` in the heartbeat response; the agent verifies that hash before swapping. The plain hex in `sha256.txt` matches the agent's case-insensitive comparison.
+
+> The tag (`v1.0.0`) and `ApplicationMain.VERSION` are versioned by hand — bump both together.
 
 ## Project layout
 

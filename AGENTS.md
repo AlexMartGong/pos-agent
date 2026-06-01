@@ -75,8 +75,20 @@ Server binds to `0.0.0.0` (not localhost) — required for LAN access from mobil
 `HeartbeatTask` (`com.agent.pos.network`) reports the agent's IP to the SaaS backend every 5 minutes so the frontend can discover the agent dynamically.
 
 - **Endpoint:** `PUT {SAAS_API_URL}/agent/stations/{STATION_ID}/url`
-- **Payload:** `{"url":"http://{localIp}:{httpPort}"}`
+- **Payload:** `{"url":"http://{localIp}:{httpPort}","currentVersion":"{ApplicationMain.VERSION}"}`
 - **Header:** `X-Agent-Key: {AGENT_API_KEY}`
 - **IP Resolution:** Uses `DatagramSocket` connected to `8.8.8.8:10002` to force the OS routing table to resolve the real LAN IP (avoids `127.0.1.1` from `/etc/hosts` on Linux). Falls back to `InetAddress.getLocalHost().getHostAddress()` if no network is available.
 - **Behaviour:** Runs immediately on startup then every 5 min via `ScheduledExecutorService` (daemon thread). If `STATION_ID` is blank/null, heartbeat is disabled with a WARN log. All failures are caught and logged — never crashes the agent.
 - **Config:** `SAAS_API_URL` (default `http://localhost:8080/api/v1`), `AGENT_API_KEY` (default `default-agent-secret`), `STATION_ID` (default empty = disabled).
+
+### Silent self-update
+On HTTP **200**, the heartbeat parses the response body into the record `AgentUpdateResponse {updateAvailable, downloadUrl, sha256}` (Jackson, `@JsonIgnoreProperties(ignoreUnknown=true)`). If `updateAvailable` is true, a daemon thread `agent-updater` (guarded by an `AtomicBoolean` against overlap):
+1. `HttpClient.send(..., BodyHandlers.ofFile(...))` streams `downloadUrl` → `pos-agent-next.jar` in the working dir.
+2. Computes SHA-256 (`MessageDigest`, streamed) and compares case-insensitively to `sha256`.
+3. **Match:** logs success and `System.exit(1)` — a **non-zero** code so WinSW's `onfailure restart` fires; the `run-agent.bat` wrapper then swaps `pos-agent-next.jar` → `pos-agent.jar` before relaunching the JVM.
+4. **Mismatch / any error:** logs WARN, `Files.deleteIfExists(pos-agent-next.jar)`, old agent keeps running.
+
+The Windows service runs via `run-agent.bat` (the WinSW `<executable>`), which performs the jar swap then `java -Xmx256m -jar pos-agent.jar`. `build-service-package.{sh,bat}` generate this wrapper into the dist.
+
+### Release pipeline (producer side)
+`.github/workflows/release.yml` fires on `v*` tag pushes: builds with `./mvnw clean package -DskipTests`, computes `sha256sum target/pos-agent.jar` → `target/sha256.txt`, and publishes a GitHub Release (`softprops/action-gh-release@v2`) with assets `pos-agent.jar` + `sha256.txt`. The SaaS feeds the jar asset URL as `downloadUrl` and the plain-hex `sha256.txt` as `sha256` in the heartbeat response — matching the agent's case-insensitive verification. Tag version and `ApplicationMain.VERSION` are bumped manually; keep them in sync.
