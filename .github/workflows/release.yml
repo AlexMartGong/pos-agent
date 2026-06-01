@@ -8,6 +8,8 @@ on:
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write     # crear Release + subir assets (evita 403)
 
     steps:
     - name: Checkout del código
