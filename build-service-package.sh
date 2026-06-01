@@ -42,11 +42,24 @@ else
 fi
 
 echo "[4/4] Copiando archivos..."
-cp "target/pos-printer-agent.jar" "$DIST_DIR/"
+cp "target/pos-agent.jar" "$DIST_DIR/"
 cp "service/pos-printer-agent.xml" "$DIST_DIR/"
 cp "service/install-service.bat" "$DIST_DIR/"
 cp "service/uninstall-service.bat" "$DIST_DIR/"
 cp "config.properties" "$DIST_DIR/" 2>/dev/null || true
+
+# Wrapper de arranque + auto-actualizacion (swap del jar antes de lanzar la JVM)
+cat > "$DIST_DIR/run-agent.bat" << 'EOF'
+@echo off
+cd /d "%~dp0"
+if exist pos-agent-next.jar (
+    echo [VentaCore] Aplicando actualizacion de agente...
+    move /y pos-agent-next.jar pos-agent.jar
+)
+echo [VentaCore] Iniciando agente...
+java -Xmx256m -jar pos-agent.jar %*
+EOF
+sed -i 's/$/\r/' "$DIST_DIR/run-agent.bat"   # CRLF para cmd.exe
 
 # Crear README
 cat > "$DIST_DIR/LEEME.txt" << 'EOF'

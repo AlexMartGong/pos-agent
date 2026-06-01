@@ -27,8 +27,8 @@ if not exist "%SCRIPT_DIR%pos-printer-agent.exe" (
     exit /b 1
 )
 
-if not exist "%SCRIPT_DIR%pos-printer-agent.jar" (
-    echo ERROR: No se encuentra pos-printer-agent.jar
+if not exist "%SCRIPT_DIR%pos-agent.jar" (
+    echo ERROR: No se encuentra pos-agent.jar
     pause
     exit /b 1
 )

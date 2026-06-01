@@ -1,0 +1,56 @@
+name: Build and Release VentaCore Agent
+
+on:
+  push:
+    tags:
+      - 'v*' # Se dispara automáticamente al subir un tag como v1.0.0, v1.0.1, etc.
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout del código
+      uses: actions/checkout@v4
+
+    - name: Configurar JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: 'maven'
+
+    - name: Compilar con Maven
+      run: |
+        if [ -f "./mvnw" ]; then
+          ./mvnw clean package -DskipTests -q
+        else
+          mvn clean package -DskipTests -q
+        fi
+
+    - name: Calcular Hash SHA-256 del JAR
+      id: calc_sha
+      run: |
+        # Calcular el hash plano del archivo final target/pos-agent.jar
+        sha256sum target/pos-agent.jar | awk '{print $1}' > target/sha256.txt
+        # Exponer el hash como variable de entorno de GitHub
+        echo "SHA256=$(cat target/sha256.txt)" >> $GITHUB_ENV
+
+    - name: Crear GitHub Release y Subir Assets
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          target/pos-agent.jar
+          target/sha256.txt
+        body: |
+          ## VentaCore POS Agent - Versión ${{ github.ref_name }}
+
+          ### Hash de seguridad (SHA-256)
+          `${{ env.SHA256 }}`
+
+          ### Cambios incluidos
+          * Actualización automática de componentes y correcciones de estabilidad en periféricos de hardware.
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

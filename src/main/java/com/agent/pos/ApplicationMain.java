@@ -22,6 +22,8 @@ public class ApplicationMain {
 
     private static final DateTimeFormatter LOG_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
+    public static final String VERSION = "1.0.0";
+
     public static void main(String[] args) throws Exception {
         log("INFO", "============================================");
         log("INFO", "POS AGENT (REST)");

@@ -51,11 +51,21 @@ if errorlevel 1 (
 )
 
 echo [4/4] Copiando archivos...
-copy "target\pos-printer-agent.jar" "%DIST_DIR%\" >nul
+copy "target\pos-agent.jar" "%DIST_DIR%\" >nul
 copy "service\pos-printer-agent.xml" "%DIST_DIR%\" >nul
 copy "service\install-service.bat" "%DIST_DIR%\" >nul
 copy "service\uninstall-service.bat" "%DIST_DIR%\" >nul
 copy "config.properties" "%DIST_DIR%\" >nul 2>nul
+
+REM Wrapper de arranque + auto-actualizacion (swap del jar antes de lanzar la JVM)
+echo @echo off> "%DIST_DIR%\run-agent.bat"
+echo cd /d "%%~dp0">> "%DIST_DIR%\run-agent.bat"
+echo if exist pos-agent-next.jar (>> "%DIST_DIR%\run-agent.bat"
+echo     echo [VentaCore] Aplicando actualizacion de agente...>> "%DIST_DIR%\run-agent.bat"
+echo     move /y pos-agent-next.jar pos-agent.jar>> "%DIST_DIR%\run-agent.bat"
+echo )>> "%DIST_DIR%\run-agent.bat"
+echo echo [VentaCore] Iniciando agente...>> "%DIST_DIR%\run-agent.bat"
+echo java -Xmx256m -jar pos-agent.jar %%*>> "%DIST_DIR%\run-agent.bat"
 
 REM Crear README
 echo POS Printer Agent - Instalacion como Servicio > "%DIST_DIR%\LEEME.txt"
