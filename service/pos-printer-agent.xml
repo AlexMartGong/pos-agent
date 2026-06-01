@@ -1,9 +1,9 @@
 <service>
-  <id>POSPrinterAgent</id>
-  <name>POS Printer Agent</name>
-  <description>Agente de impresion para terminales POS - La Pasadita</description>
+  <id>POS Agent</id>
+  <name>POS Agent</name>
+  <description>Agente para terminales POS</description>
   <executable>run-agent.bat</executable>
-  <arguments></arguments>
+  <arguments/>
   <workingdirectory>%BASE%</workingdirectory>
 
   <!-- Logging -->

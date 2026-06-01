@@ -112,7 +112,7 @@ public class HeartbeatTask implements Runnable {
                         .build();
                 httpClient.send(dl, HttpResponse.BodyHandlers.ofFile(UPDATE_FILE));
 
-                String calc = sha256Hex(UPDATE_FILE);
+                String calc = sha256Hex();
                 if (calc.equalsIgnoreCase(upd.sha256())) {
                     log("INFO", "Hash verificado. Reiniciando para aplicar actualizacion -> " + upd.sha256());
                     System.exit(1);
@@ -136,9 +136,9 @@ public class HeartbeatTask implements Runnable {
         t.start();
     }
 
-    private static String sha256Hex(Path file) throws Exception {
+    private static String sha256Hex() throws Exception {
         MessageDigest md = MessageDigest.getInstance("SHA-256");
-        try (InputStream in = Files.newInputStream(file)) {
+        try (InputStream in = Files.newInputStream(HeartbeatTask.UPDATE_FILE)) {
             byte[] buf = new byte[8192];
             int n;
             while ((n = in.read(buf)) != -1) {
