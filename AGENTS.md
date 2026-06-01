@@ -83,7 +83,7 @@ Server binds to `0.0.0.0` (not localhost) — required for LAN access from mobil
 
 ### Silent self-update
 On HTTP **200**, the heartbeat parses the response body into the record `AgentUpdateResponse {updateAvailable, downloadUrl, sha256}` (Jackson, `@JsonIgnoreProperties(ignoreUnknown=true)`). If `updateAvailable` is true, a daemon thread `agent-updater` (guarded by an `AtomicBoolean` against overlap):
-1. `HttpClient.send(..., BodyHandlers.ofFile(...))` streams `downloadUrl` → `pos-agent-next.jar` in the working dir.
+1. `HttpClient.send(..., BodyHandlers.ofFile(...))` streams `downloadUrl` → `pos-agent-next.jar` in the working dir. The shared client is built with `.followRedirects(HttpClient.Redirect.NORMAL)` — required because GitHub asset URLs return a **302** to the CDN (`release-assets.githubusercontent.com`); without it the empty redirect body is written and the hash never matches (SHA-256 of empty input = `e3b0c4...b855`).
 2. Computes SHA-256 (`MessageDigest`, streamed) and compares case-insensitively to `sha256`.
 3. **Match:** logs success and `System.exit(1)` — a **non-zero** code so WinSW's `onfailure restart` fires; the `run-agent.bat` wrapper then swaps `pos-agent-next.jar` → `pos-agent.jar` before relaunching the JVM.
 4. **Mismatch / any error:** logs WARN, `Files.deleteIfExists(pos-agent-next.jar)`, old agent keeps running.
